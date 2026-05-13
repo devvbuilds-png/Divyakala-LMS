@@ -1,0 +1,28 @@
+{
+  "courses": [
+    {
+      "id": "srinivasa",
+      "title": "Drawing Divine Forms - Srinivasa",
+      "instructor": "Drdha Vrata Gorrick",
+      "price": 10600,
+      "currency": "INR",
+      "thumbnail": "/art/srinivasa-thumb.jpg",
+      "duration": "5 months 4 days",
+      "sessionCount": 6,
+      "level": "Beginner-friendly",
+      "available": true
+    },
+    {
+      "id": "foundations-of-talamana",
+      "title": "Foundations of Talamana",
+      "instructor": "Drdha Vrata Gorrick",
+      "price": 8400,
+      "currency": "INR",
+      "thumbnail": "/art/talamana-grid.jpg",
+      "duration": "4 months",
+      "sessionCount": 5,
+      "level": "Foundations",
+      "available": true
+    }
+  ]
+}

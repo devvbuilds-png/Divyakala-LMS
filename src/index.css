@@ -1,0 +1,95 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+@import '@tldraw/tldraw/tldraw.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: 'Poppins', sans-serif;
+  font-size: 13px;
+  background-color: #F5ECD2;
+  color: #2A1F18;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  overflow-x: hidden;
+  background:
+    radial-gradient(circle at 12% 8%, rgba(201, 149, 42, 0.10), transparent 24rem),
+    radial-gradient(circle at 92% 12%, rgba(216, 126, 93, 0.08), transparent 22rem),
+    linear-gradient(135deg, rgba(255,255,255,0.18) 25%, transparent 25%) 0 0 / 18px 18px,
+    #F5ECD2;
+  color: #2A1F18;
+}
+
+@media (max-width: 768px) {
+  :root {
+    font-size: 12.5px;
+  }
+}
+
+h1, h2, h3, h4 {
+  font-family: 'Poppins', sans-serif;
+}
+
+.font-display,
+.font-body {
+  font-family: 'Poppins', sans-serif !important;
+}
+
+button, input, select, textarea {
+  font: inherit;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Course detail — session preview pill hover */
+.preview-pill {
+  transition: background-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
+}
+.preview-pill:hover {
+  background-color: #C9952A;
+  color: #ffffff;
+  box-shadow: 0 1px 4px rgba(201, 149, 42, 0.35);
+}
+
+/* Course detail — FAQ row hover */
+.faq-row:hover .faq-label,
+.faq-row:hover .faq-icon {
+  color: #C9952A;
+}
+
+.art-lines {
+  background-image:
+    linear-gradient(115deg, rgba(42,31,24,0.10) 1px, transparent 1px),
+    radial-gradient(circle at 35% 35%, rgba(201,149,42,0.16), transparent 18rem),
+    radial-gradient(circle at 70% 70%, rgba(216,126,93,0.10), transparent 16rem);
+  background-size: 28px 28px, auto, auto;
+}
+
+.ornate-border {
+  background:
+    linear-gradient(#FBF6E9, #FBF6E9) padding-box,
+    repeating-linear-gradient(45deg, #C9952A 0 10px, #E5D7B3 10px 18px, #B07F1F 18px 26px) border-box;
+  border: 12px solid transparent;
+}
+
+.media-needed {
+  background:
+    linear-gradient(135deg, rgba(42,31,24,0.84), rgba(42,31,24,0.72)),
+    radial-gradient(circle at 25% 20%, rgba(201,149,42,0.22), transparent 18rem);
+}

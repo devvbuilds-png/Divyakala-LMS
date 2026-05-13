@@ -1,0 +1,16 @@
+{
+  "enrollments": [
+    {
+      "courseId": "srinivasa",
+      "progress": 0.4,
+      "lastSessionId": "session-3",
+      "lastTimestamp": 754
+    },
+    {
+      "courseId": "foundations-of-talamana",
+      "progress": 0.05,
+      "lastSessionId": "session-1",
+      "lastTimestamp": 0
+    }
+  ]
+}
