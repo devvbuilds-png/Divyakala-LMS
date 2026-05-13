@@ -1,0 +1,18 @@
+{
+  "notifications": [
+    {
+      "id": "n1",
+      "type": "workshop",
+      "title": "Live workshop in 2 days - Iconography Q&A",
+      "timestamp": "Today",
+      "read": false
+    },
+    {
+      "id": "n2",
+      "type": "feedback",
+      "title": "Drdha left feedback on your Session 2 submission",
+      "timestamp": "Yesterday",
+      "read": false
+    }
+  ]
+}
