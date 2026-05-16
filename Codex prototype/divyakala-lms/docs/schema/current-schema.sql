@@ -16,6 +16,14 @@ create table profiles (
   country text,
   phone text,
   avatar_url text,
+  age_group text,
+  artist_background text,
+  why_shilpa_shastra text,
+  portfolio_url text,
+  admission_status text default 'prospect',
+  fee_status text default 'pending',
+  currency text,
+  payment_notes text,
   created_at timestamptz default now(),
   last_seen_at timestamptz
 );
@@ -54,8 +62,74 @@ create table courses (
   materials_needed text,
   access_details text,
   certificate_enabled boolean default true,
+  course_type text not null default 'short',
   created_at timestamptz default now(),
   updated_at timestamptz default now()
+);
+
+-- Term Groups (long-course intakes)
+create table term_groups (
+  id uuid primary key default gen_random_uuid(),
+  course_id uuid references courses(id),
+  name text not null,
+  start_date date,
+  status text not null default 'active',
+  created_at timestamptz default now()
+);
+
+-- Batches (time-slot cohorts inside a term group)
+create table batches (
+  id uuid primary key default gen_random_uuid(),
+  term_group_id uuid references term_groups(id) on delete cascade,
+  name text not null,
+  schedule_note text,
+  seats int,
+  status text not null default 'active',
+  created_at timestamptz default now()
+);
+
+-- Batch Modules (per-batch modules)
+-- Legacy demo scaffold. Current long-course UI should use term_modules
+-- for shared syllabus chapters and batch_sessions.batch_id for per-batch pace.
+create table batch_modules (
+  id uuid primary key default gen_random_uuid(),
+  batch_id uuid references batches(id) on delete cascade,
+  module_number int not null,
+  title text not null,
+  created_at timestamptz default now()
+);
+
+-- Term Modules (shared syllabus chapters inside a term group)
+create table term_modules (
+  id uuid primary key default gen_random_uuid(),
+  term_group_id uuid references term_groups(id) on delete cascade,
+  module_number int not null,
+  title text not null,
+  created_at timestamptz default now(),
+  unique (term_group_id, module_number)
+);
+
+-- Batch Sessions (per-batch live sessions mapped to a shared module)
+create table batch_sessions (
+  id uuid primary key default gen_random_uuid(),
+  module_id uuid references batch_modules(id) on delete cascade,
+  batch_id uuid references batches(id) on delete cascade,
+  term_module_id uuid references term_modules(id) on delete cascade,
+  title text not null,
+  scheduled_at timestamptz,
+  zoom_link text,
+  recording_url text,
+  status text not null default 'upcoming',
+  created_at timestamptz default now()
+);
+
+-- Batch Enrollments (which student belongs to which batch)
+create table batch_enrollments (
+  id uuid primary key default gen_random_uuid(),
+  batch_id uuid references batches(id) on delete cascade,
+  student_id uuid references profiles(id) on delete cascade,
+  enrolled_at timestamptz default now(),
+  unique (batch_id, student_id)
 );
 
 -- Sessions

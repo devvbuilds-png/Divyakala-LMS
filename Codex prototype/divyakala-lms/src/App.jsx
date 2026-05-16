@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { supabase } from './lib/supabase'
+import { hasSupabaseConfig, supabase } from './lib/supabase'
 import { Tldraw } from '@tldraw/tldraw'
 import {
   BarChart3,
@@ -296,6 +296,18 @@ function useAuth() {
   return useContext(AuthContext)
 }
 
+function isStudentProfileComplete(profile) {
+  if (!profile) return false
+  if (profile.role === 'admin') return true
+  return Boolean(
+    profile.country &&
+    profile.phone &&
+    profile.age_group &&
+    profile.artist_background &&
+    profile.why_shilpa_shastra
+  )
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 function App() {
@@ -419,6 +431,8 @@ function App() {
   )
 
   */
+  if (!hasSupabaseConfig) return <MissingSupabaseConfig />
+
   return (
     <BrowserRouter>
       <AuthProvider>
@@ -426,12 +440,14 @@ function App() {
       <Routes>
         <Route path="/" element={<RootRedirect />} />
         <Route path="/auth/:mode" element={<Auth />} />
+        <Route path="/onboarding" element={<Protected><StudentOnboarding /></Protected>} />
         <Route path="/admin/auth" element={<AdminAuth />} />
         <Route path="/admin/*" element={<AdminProtected><AdminShell /></AdminProtected>} />
         <Route element={<Protected><Shell /></Protected>}>
           <Route path="/learning" element={<MyLearning />} />
           <Route path="/browse" element={<BrowseCourses />} />
           <Route path="/workshops" element={<LiveWorkshops />} />
+          <Route path="/program/batches/:batchId" element={<StudentBatchDashboard />} />
           <Route path="/courses/:courseId" element={<CourseDetail />} />
           <Route path="/journal" element={<PracticeJournal />} />
           <Route path="/courses/:courseId/certificate" element={<Certificate />} />
@@ -440,6 +456,25 @@ function App() {
       </Routes>
       </AuthProvider>
     </BrowserRouter>
+  )
+}
+
+function MissingSupabaseConfig() {
+  return (
+    <div className="grid min-h-screen place-items-center bg-bg px-4 text-ink">
+      <section className="w-full max-w-2xl rounded-2xl border border-border bg-surface p-6 shadow-sm">
+        <img src={logo} alt="Divyakala" className="mb-6 max-h-14 object-contain" />
+        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-primary">Deployment setup needed</p>
+        <h1 className="mt-2 font-display text-3xl font-semibold">Supabase is not connected yet.</h1>
+        <p className="mt-3 text-sm leading-7 text-ink-muted">
+          Add these environment variables in Vercel, then redeploy. This keeps the student and admin apps from showing a blank page when the backend keys are missing.
+        </p>
+        <div className="mt-5 space-y-2 rounded-xl border border-border bg-surface-warm p-4 font-mono text-sm text-ink">
+          <p>VITE_SUPABASE_URL</p>
+          <p>VITE_SUPABASE_ANON_KEY</p>
+        </div>
+      </section>
+    </div>
   )
 }
 
@@ -471,13 +506,22 @@ function RootRedirect() {
   if (loading) return <LoadingScreen />
   if (!session) return <Navigate to="/auth/sign-in" />
   if (profile?.role === 'admin') return <Navigate to="/admin" />
+  if (!isStudentProfileComplete(profile)) return <Navigate to="/onboarding" />
   return <Navigate to="/learning" />
 }
 
 function Protected({ children }) {
-  const { session, loading } = useAuth()
+  const { session, profile, loading } = useAuth()
+  const location = useLocation()
   if (loading) return <LoadingScreen />
-  return session ? children : <Navigate to="/auth/sign-in" replace />
+  if (!session) return <Navigate to="/auth/sign-in" replace />
+  if (profile?.role !== 'admin' && !isStudentProfileComplete(profile) && location.pathname !== '/onboarding') {
+    return <Navigate to="/onboarding" replace />
+  }
+  if (profile?.role !== 'admin' && isStudentProfileComplete(profile) && location.pathname === '/onboarding') {
+    return <Navigate to="/learning" replace />
+  }
+  return children
 }
 
 function AdminProtected({ children }) {
@@ -554,6 +598,7 @@ function Shell() {
             <Route path="/learning" element={<MyLearning />} />
             <Route path="/browse" element={<BrowseCourses />} />
             <Route path="/workshops" element={<LiveWorkshops />} />
+            <Route path="/program/batches/:batchId" element={<StudentBatchDashboard />} />
             <Route path="/courses/:courseId" element={<CourseDetail />} />
             <Route path="/journal" element={<PracticeJournal />} />
             <Route path="/courses/:courseId/certificate" element={<Certificate />} />
@@ -566,6 +611,7 @@ function Shell() {
 }
 
 function getTitle(pathname) {
+  if (pathname.includes('/program/batches/')) return 'Batch Dashboard'
   if (pathname.includes('/browse')) return 'Browse Courses'
   if (pathname.includes('/workshops')) return 'Live Workshops'
   if (pathname.includes('/journal')) return 'Your Practice Journal'
@@ -803,10 +849,132 @@ function ProfileModal({ onClose }) {
   )
 }
 
+function StudentOnboarding() {
+  const { session, profile, refreshProfile } = useAuth()
+  const navigate = useNavigate()
+  const needsCountry = !profile?.country
+  const needsPhone = !profile?.phone
+  const [ageGroup, setAgeGroup] = useState(profile?.age_group ?? '')
+  const [artistBackground, setArtistBackground] = useState(profile?.artist_background ?? '')
+  const [whyShilpaShastra, setWhyShilpaShastra] = useState(profile?.why_shilpa_shastra ?? '')
+  const [portfolioUrl, setPortfolioUrl] = useState(profile?.portfolio_url ?? '')
+  const [country, setCountry] = useState(profile?.country ?? 'India')
+  const [phone, setPhone] = useState(profile?.phone ?? '')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  async function handleFinish(event) {
+    event.preventDefault()
+    if (!session?.user?.id) return
+    if (!ageGroup || !artistBackground.trim() || !whyShilpaShastra.trim() || (needsCountry && !country) || (needsPhone && !phone.trim())) {
+      setError('Please complete the required fields so Drdha can understand your practice context.')
+      return
+    }
+
+    setSaving(true)
+    setError('')
+    const { error: updateError } = await supabase.from('profiles').upsert({
+      id: session.user.id,
+      email: profile?.email ?? session.user.email,
+      name: profile?.name ?? session.user.email?.split('@')[0] ?? 'Student',
+      role: profile?.role ?? 'student',
+      country,
+      phone: phone.trim() || null,
+      age_group: ageGroup,
+      artist_background: artistBackground.trim(),
+      why_shilpa_shastra: whyShilpaShastra.trim(),
+      portfolio_url: portfolioUrl.trim() || null,
+      admission_status: profile?.admission_status ?? 'prospect',
+      fee_status: profile?.fee_status ?? 'pending',
+      currency: profile?.currency ?? (country === 'India' ? 'INR' : 'USD'),
+    })
+
+    if (updateError) {
+      setError(updateError.message)
+    } else {
+      await refreshProfile(session.user.id)
+      navigate('/learning', { replace: true })
+    }
+    setSaving(false)
+  }
+
+  return (
+    <div className="min-h-screen bg-bg px-4 py-8 text-ink">
+      <div className="mx-auto grid min-h-[calc(100vh-64px)] w-full max-w-5xl items-center gap-6 lg:grid-cols-[0.42fr_0.58fr]">
+        <section className="overflow-hidden rounded-2xl border border-border bg-surface shadow-sm">
+          <ArtPanel label={art.srinivasa} className="h-64 rounded-none lg:h-[620px]" />
+        </section>
+
+        <form onSubmit={handleFinish} className="rounded-2xl border border-border bg-surface p-6 shadow-md">
+          <img src={logo} alt="Divyakala" className="mb-6 max-h-14 object-contain" />
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">Complete your profile</p>
+          <h1 className="mt-2 font-display text-3xl font-medium">Tell us a little about your practice.</h1>
+          <p className="mt-2 max-w-xl text-sm leading-6 text-ink-muted">
+            This helps Drdha understand your background before placing you into the right learning path. Keep it simple; a few honest lines are enough.
+          </p>
+
+          <div className="mt-6 space-y-4">
+            {(needsCountry || needsPhone) && (
+              <div className="grid gap-4 sm:grid-cols-2">
+                {needsCountry && (
+                  <label className="block">
+                    <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-ink-muted">Country</span>
+                    <select value={country} onChange={(event) => setCountry(event.target.value)} className="w-full rounded-lg border border-border bg-surface px-4 py-3 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15">
+                      <option>India</option>
+                      <option>United States</option>
+                      <option>United Kingdom</option>
+                      <option>Canada</option>
+                      <option>Australia</option>
+                      <option>Other</option>
+                    </select>
+                  </label>
+                )}
+                {needsPhone && <Input label="Phone / WhatsApp" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="+91 98765 43210" required />}
+              </div>
+            )}
+
+            <label className="block">
+              <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-ink-muted">Age group</span>
+              <select value={ageGroup} onChange={(event) => setAgeGroup(event.target.value)} required className="w-full rounded-lg border border-border bg-surface px-4 py-3 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15">
+                <option value="">Choose one</option>
+                <option value="Under 19">Under 19</option>
+                <option value="19–30">19–30</option>
+                <option value="Above 30">Above 30</option>
+              </select>
+            </label>
+
+            <label className="block">
+              <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-ink-muted">Artist background & experience</span>
+              <textarea value={artistBackground} onChange={(event) => setArtistBackground(event.target.value)} rows={4} required placeholder="Have you drawn before? Studied any traditional art, design, temple arts, or devotional practice?" className="w-full rounded-lg border border-border bg-surface px-4 py-3 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15" />
+            </label>
+
+            <label className="block">
+              <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-ink-muted">Why Shilpa Shastra?</span>
+              <textarea value={whyShilpaShastra} onChange={(event) => setWhyShilpaShastra(event.target.value)} rows={4} required placeholder="What draws you to sacred form, proportion, and this way of learning?" className="w-full rounded-lg border border-border bg-surface px-4 py-3 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15" />
+            </label>
+
+            <Input label="Portfolio link (optional)" value={portfolioUrl} onChange={(event) => setPortfolioUrl(event.target.value)} placeholder="Website, Instagram, Drive folder, or leave blank" />
+
+            <div className="rounded-xl border border-border bg-surface-warm p-4 text-sm leading-6 text-ink-muted">
+              After this, your profile appears in the admin CRM as a prospect. Drdha can then place you into the right batch when enrollment is confirmed.
+            </div>
+
+            {error && <p className="rounded-lg border border-error/20 bg-error/5 p-3 text-sm text-error">{error}</p>}
+          </div>
+
+          <Button type="submit" className="mt-6 w-full" disabled={saving}>
+            {saving ? 'Saving...' : 'Finish'}
+          </Button>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 function Auth() {
   const { mode = 'sign-in' } = useParams()
   const navigate = useNavigate()
-  const { session } = useAuth()
+  const { session, refreshProfile } = useAuth()
   const isSignUp = mode === 'sign-up'
 
   const [email, setEmail] = useState('')
@@ -865,7 +1033,11 @@ function Auth() {
         country,
         phone: phone.trim() || null,
         role: 'student',
+        admission_status: 'prospect',
+        fee_status: 'pending',
+        currency: country === 'India' ? 'INR' : 'USD',
       })
+      await refreshProfile(data.user.id)
     }
     // On success: onAuthStateChange fires → AuthProvider sets session → useEffect above navigates
     setLoading(false)
@@ -995,6 +1167,8 @@ function MyLearning() {
   const { session } = useAuth()
   const [learningItems, setLearningItems] = useState([])
   const [featuredItem, setFeaturedItem] = useState(null)
+  const [programItem, setProgramItem] = useState(null)
+  const [activeLearningTab, setActiveLearningTab] = useState(null)
   const [loadingLearning, setLoadingLearning] = useState(true)
   const [learningError, setLearningError] = useState('')
 
@@ -1003,6 +1177,7 @@ function MyLearning() {
       if (!session?.user?.id) {
         setLearningItems([])
         setFeaturedItem(null)
+        setProgramItem(null)
         setLoadingLearning(false)
         return
       }
@@ -1010,67 +1185,127 @@ function MyLearning() {
       setLoadingLearning(true)
       setLearningError('')
 
-      const { data: enrollmentRows, error } = await supabase
-        .from('enrollments')
-        .select('*')
-        .eq('user_id', session.user.id)
-        .order('enrolled_at', { ascending: false })
+      const [
+        { data: enrollmentRows, error },
+        { data: batchEnrollmentRows, error: batchEnrollmentError },
+      ] = await Promise.all([
+        supabase
+          .from('enrollments')
+          .select('*')
+          .eq('user_id', session.user.id)
+          .order('enrolled_at', { ascending: false }),
+        supabase
+          .from('batch_enrollments')
+          .select('*')
+          .eq('student_id', session.user.id),
+      ])
 
-      if (error) {
-        setLearningError(error.message)
+      const firstError = error || batchEnrollmentError
+      if (firstError) {
+        setLearningError(firstError.message)
         setLearningItems([])
         setFeaturedItem(null)
+        setProgramItem(null)
         setLoadingLearning(false)
         return
       }
 
       const userEnrollments = enrollmentRows ?? []
       const courseIds = [...new Set(userEnrollments.map((item) => item.course_id).filter(Boolean))]
+      let nextItems = []
 
-      if (!courseIds.length) {
-        setLearningItems([])
-        setFeaturedItem(null)
-        setLoadingLearning(false)
-        return
+      if (courseIds.length) {
+        const [{ data: courseRows }, { data: sessionRows }] = await Promise.all([
+          supabase.from('courses').select('*').in('id', courseIds),
+          supabase.from('sessions').select('id, course_id, position, title').in('course_id', courseIds).order('position', { ascending: true }),
+        ])
+
+        const coursesById = Object.fromEntries((courseRows ?? []).map((course) => [course.id, course]))
+        const sessionsByCourse = (sessionRows ?? []).reduce((acc, item) => {
+          acc[item.course_id] = [...(acc[item.course_id] ?? []), item]
+          return acc
+        }, {})
+
+        nextItems = userEnrollments
+          .map((enrollment) => {
+            const course = coursesById[enrollment.course_id] ?? courses.find((item) => item.id === enrollment.course_id)
+            if (!course) return null
+
+            const courseSessionRows = sessionsByCourse[enrollment.course_id] ?? []
+            const fallbackSessions = (course.sessionsList ?? []).map(([id, title], index) => ({ id, title, position: index + 1 }))
+            const orderedSessions = courseSessionRows.length ? courseSessionRows : fallbackSessions
+            const progress = Math.round(Number(enrollment.progress ?? 0))
+            const lastSession = orderedSessions.find((item) => item.id === enrollment.last_session_id) ?? orderedSessions[0]
+            const sessionCount = orderedSessions.length || course.sessions || 0
+            const currentIndex = lastSession ? Math.max(orderedSessions.findIndex((item) => item.id === lastSession.id), 0) + 1 : 1
+
+            return {
+              enrollment,
+              course,
+              progress,
+              lastSessionId: lastSession?.id ?? 'session-1',
+              lastSessionTitle: lastSession?.title ?? 'Start the course',
+              label: sessionCount ? `Session ${currentIndex} of ${sessionCount}` : 'Ready to begin',
+            }
+          })
+          .filter(Boolean)
       }
 
-      const [{ data: courseRows }, { data: sessionRows }] = await Promise.all([
-        supabase.from('courses').select('*').in('id', courseIds),
-        supabase.from('sessions').select('id, course_id, position, title').in('course_id', courseIds).order('position', { ascending: true }),
-      ])
+      const batchEnrollment = (batchEnrollmentRows ?? [])[0] ?? null
+      let nextProgramItem = null
 
-      const coursesById = Object.fromEntries((courseRows ?? []).map((course) => [course.id, course]))
-      const sessionsByCourse = (sessionRows ?? []).reduce((acc, item) => {
-        acc[item.course_id] = [...(acc[item.course_id] ?? []), item]
-        return acc
-      }, {})
+      if (batchEnrollment?.batch_id) {
+        const { data: batchData, error: batchError } = await supabase
+          .from('batches')
+          .select('*')
+          .eq('id', batchEnrollment.batch_id)
+          .maybeSingle()
 
-      const nextItems = userEnrollments
-        .map((enrollment) => {
-          const course = coursesById[enrollment.course_id] ?? courses.find((item) => item.id === enrollment.course_id)
-          if (!course) return null
+        if (batchError) {
+          setLearningError(batchError.message)
+          setLoadingLearning(false)
+          return
+        }
 
-          const courseSessionRows = sessionsByCourse[enrollment.course_id] ?? []
-          const fallbackSessions = (course.sessionsList ?? []).map(([id, title], index) => ({ id, title, position: index + 1 }))
-          const orderedSessions = courseSessionRows.length ? courseSessionRows : fallbackSessions
-          const progress = Math.round(Number(enrollment.progress ?? 0))
-          const lastSession = orderedSessions.find((item) => item.id === enrollment.last_session_id) ?? orderedSessions[0]
-          const sessionCount = orderedSessions.length || course.sessions || 0
-          const currentIndex = lastSession ? Math.max(orderedSessions.findIndex((item) => item.id === lastSession.id), 0) + 1 : 1
+        if (batchData) {
+          const [
+            { data: termGroupData },
+            { data: sessionRows },
+          ] = await Promise.all([
+            supabase.from('term_groups').select('*').eq('id', batchData.term_group_id).maybeSingle(),
+            supabase.from('batch_sessions').select('*').eq('batch_id', batchData.id).order('scheduled_at', { ascending: true }),
+          ])
 
-          return {
-            enrollment,
-            course,
-            progress,
-            lastSessionId: lastSession?.id ?? 'session-1',
-            lastSessionTitle: lastSession?.title ?? 'Start the course',
-            label: sessionCount ? `Session ${currentIndex} of ${sessionCount}` : 'Ready to begin',
+          const [{ data: courseData }, { data: moduleRows }] = await Promise.all([
+            termGroupData?.course_id ? supabase.from('courses').select('*').eq('id', termGroupData.course_id).maybeSingle() : Promise.resolve({ data: null }),
+            termGroupData?.id ? supabase.from('term_modules').select('*').eq('term_group_id', termGroupData.id).order('module_number', { ascending: true }) : Promise.resolve({ data: [] }),
+          ])
+
+          const now = Date.now()
+          const sessions = sessionRows ?? []
+          const upcomingSession = sessions.find((item) => item.scheduled_at && new Date(item.scheduled_at).getTime() >= now)
+          const recentSession = [...sessions].reverse().find((item) => item.scheduled_at && new Date(item.scheduled_at).getTime() < now) ?? sessions[sessions.length - 1] ?? null
+          const activeSession = upcomingSession ?? recentSession
+          const modulesById = Object.fromEntries((moduleRows ?? []).map((module) => [module.id, module]))
+
+          nextProgramItem = {
+            enrollment: batchEnrollment,
+            batch: batchData,
+            termGroup: termGroupData ?? null,
+            course: courseData ?? null,
+            modules: moduleRows ?? [],
+            sessions,
+            activeSession,
+            activeModule: activeSession?.term_module_id ? modulesById[activeSession.term_module_id] : null,
+            label: upcomingSession ? 'Next live class' : recentSession ? 'Most recent class' : 'Ready for scheduling',
           }
-        })
-        .filter(Boolean)
+        }
+      }
 
       setLearningItems(nextItems)
       setFeaturedItem(nextItems[0] ?? null)
+      setProgramItem(nextProgramItem)
+      setActiveLearningTab((current) => current ?? (nextProgramItem ? 'program' : 'courses'))
       setLoadingLearning(false)
     }
 
@@ -1090,50 +1325,426 @@ function MyLearning() {
     )
   }
 
-  if (!learningItems.length) {
-    return (
-      <div className="grid gap-5 rounded-2xl border border-dashed border-border bg-surface p-10 text-center">
-        <BookOpen className="mx-auto text-ink-soft" size={36} />
+  const selectedTab = activeLearningTab ?? (programItem ? 'program' : 'courses')
+  const continueItems = [programItem, featuredItem].filter(Boolean).slice(0, 2)
+
+  return (
+    <div className="space-y-7">
+      <div className="inline-flex rounded-full border border-border bg-surface p-1 shadow-sm">
+        {[
+          ['program', 'My Program'],
+          ['courses', 'My Courses'],
+        ].map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => setActiveLearningTab(value)}
+            className={`rounded-full px-5 py-2 text-[13px] font-semibold transition ${selectedTab === value ? 'bg-primary text-white shadow-sm' : 'text-ink-muted hover:bg-primary-soft hover:text-primary'}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <section className="space-y-4">
+        <SectionTitle title="Continue Learning" subtitle="Jump back into whichever track needs your attention next." />
+        {continueItems.length ? (
+          <div className="grid gap-5 lg:grid-cols-2">
+            {programItem && <LongCourseContinueCard programItem={programItem} />}
+            {featuredItem && <ShortCourseContinueCard item={featuredItem} />}
+          </div>
+        ) : (
+          <div className="grid gap-4 rounded-2xl border border-dashed border-border bg-surface p-10 text-center">
+            <BookOpen className="mx-auto text-ink-soft" size={36} />
+            <div>
+              <h2 className="font-display text-2xl font-semibold">Your learning space is ready.</h2>
+              <p className="mx-auto mt-1 max-w-lg text-sm text-ink-muted">When you enroll in a short course or Drdha places you into a batch, your next lesson will appear here.</p>
+            </div>
+            <Link to="/browse"><Button>Browse Courses</Button></Link>
+          </div>
+        )}
+      </section>
+
+      {selectedTab === 'program' ? (
+        <section className="space-y-4">
+          <SectionTitle title="My Program" subtitle="Your long-course batch and live-class path." />
+          {programItem ? (
+            <LongCourseProgramCard programItem={programItem} />
+          ) : (
+            <div className="rounded-2xl border border-dashed border-border bg-surface px-6 py-12 text-center">
+              <Users className="mx-auto mb-3 text-ink-soft" size={34} />
+              <p className="font-display text-xl font-semibold">No batch placement yet.</p>
+              <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-ink-muted">Your profile is in the CRM. Once admission is confirmed, Drdha can place you into the right long-course batch.</p>
+              <Link to="/browse"><Button className="mt-5" variant="secondary">Explore short courses</Button></Link>
+            </div>
+          )}
+        </section>
+      ) : (
+        <section className="space-y-4">
+          <SectionTitle title="My Courses" subtitle="Your self-paced short courses." />
+          {learningItems.length ? (
+            <div className="grid gap-5 md:grid-cols-2">{learningItems.map((item) => (
+              <CourseCard
+                key={item.enrollment.id}
+                course={item.course}
+                progress={item.progress}
+                lastSessionId={item.lastSessionId}
+              />
+            ))}</div>
+          ) : (
+            <div className="grid gap-5 rounded-2xl border border-dashed border-border bg-surface p-10 text-center">
+              <BookOpen className="mx-auto text-ink-soft" size={36} />
+              <div>
+                <h2 className="font-display text-2xl font-semibold">No short courses yet.</h2>
+                <p className="mt-1 text-sm text-ink-muted">Browse published courses and enroll to begin tracking your practice here.</p>
+              </div>
+              <Link to="/browse"><Button>Browse Courses</Button></Link>
+            </div>
+          )}
+        </section>
+      )}
+      <JournalPreview />
+      <WorkshopBanner />
+    </div>
+  )
+}
+
+function formatProgramDate(value) {
+  if (!value) return 'Schedule not set'
+  return new Date(value).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })
+}
+
+function longCourseTitle(programItem) {
+  return programItem.course?.title ?? 'Long-course program'
+}
+
+function batchDashboardPath(programItem) {
+  return `/program/batches/${programItem.batch.id}`
+}
+
+function LongCourseContinueCard({ programItem }) {
+  const session = programItem.activeSession
+  return (
+    <article className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="font-display text-2xl font-semibold">No enrolled courses yet.</h2>
-          <p className="mt-1 text-sm text-ink-muted">Browse published courses and enroll to begin tracking your practice here.</p>
+          <Badge variant="accent">Long Course</Badge>
+          <h3 className="mt-3 font-display text-2xl font-semibold">{longCourseTitle(programItem)}</h3>
+          <p className="mt-1 text-sm text-ink-muted">{programItem.batch.name}{programItem.termGroup?.name ? ` - ${programItem.termGroup.name}` : ''}</p>
         </div>
-        <Link to="/browse"><Button>Browse Courses</Button></Link>
+        <CalendarDays className="shrink-0 text-primary" size={24} />
+      </div>
+      <div className="mt-5 rounded-xl border border-border bg-surface-warm p-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">{programItem.label}</p>
+        <p className="mt-1 font-display text-lg font-semibold">{session?.title ?? 'No live class scheduled yet'}</p>
+        <p className="mt-1 text-sm text-ink-muted">{formatProgramDate(session?.scheduled_at)}</p>
+        {programItem.activeModule && <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-primary">Module {programItem.activeModule.module_number}: {programItem.activeModule.title}</p>}
+      </div>
+      <Link to={batchDashboardPath(programItem)}><Button className="mt-5 w-full">Open Batch Dashboard</Button></Link>
+    </article>
+  )
+}
+
+function ShortCourseContinueCard({ item }) {
+  return (
+    <article className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <Badge variant="success">Short Course</Badge>
+          <h3 className="mt-3 font-display text-2xl font-semibold">{item.course.title}</h3>
+          <p className="mt-1 text-sm text-ink-muted">By {item.course.instructor ?? 'Drdha Vrata Gorrick'}</p>
+        </div>
+        <Play className="shrink-0 text-primary" size={24} />
+      </div>
+      <Progress value={item.progress} className="mt-5" />
+      <p className="mt-3 text-sm text-ink-muted">{item.progress}% complete - {item.label}</p>
+      <p className="mt-2 text-sm">You left off at: <span className="font-semibold">{item.lastSessionTitle}</span></p>
+      <div className="mt-5 flex flex-wrap gap-3">
+        <Link to={`/courses/${item.course.id}/lesson/${item.lastSessionId}`}><Button>Resume</Button></Link>
+        <Link to={`/courses/${item.course.id}`}><Button variant="ghost">View course</Button></Link>
+      </div>
+    </article>
+  )
+}
+
+function LongCourseProgramCard({ programItem }) {
+  const completedSessions = programItem.sessions.filter((session) => session.recording_url || (session.scheduled_at && new Date(session.scheduled_at).getTime() < Date.now())).length
+  return (
+    <Link to={batchDashboardPath(programItem)} className="block">
+      <article className="rounded-2xl border border-border bg-surface p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-primary/60 hover:shadow-md">
+        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+          <div>
+            <Badge variant="accent">Long Course</Badge>
+            <h3 className="mt-3 font-display text-3xl font-semibold">{programItem.batch.name}</h3>
+            <p className="mt-1 text-sm font-semibold text-ink">{longCourseTitle(programItem)}</p>
+            <p className="mt-1 text-sm text-ink-muted">{programItem.termGroup?.name ?? 'Term group'}{programItem.batch.schedule_note ? ` - ${programItem.batch.schedule_note}` : ''}</p>
+          </div>
+          <span className="inline-flex rounded-full border-[1.5px] border-primary bg-bg px-4 py-2 text-[13px] font-semibold text-primary transition hover:bg-primary-soft">
+            Open Dashboard
+          </span>
+        </div>
+        <div className="mt-5 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-xl border border-border bg-surface-warm p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Modules</p>
+            <p className="mt-1 font-display text-xl font-semibold">{programItem.modules.length}</p>
+          </div>
+          <div className="rounded-xl border border-border bg-surface-warm p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Sessions</p>
+            <p className="mt-1 font-display text-xl font-semibold">{programItem.sessions.length}</p>
+          </div>
+          <div className="rounded-xl border border-border bg-surface-warm p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Completed</p>
+            <p className="mt-1 font-display text-xl font-semibold">{completedSessions}</p>
+          </div>
+        </div>
+      </article>
+    </Link>
+  )
+}
+
+function StudentBatchDashboard() {
+  const { batchId } = useParams()
+  const navigate = useNavigate()
+  const { session } = useAuth()
+  const [batch, setBatch] = useState(null)
+  const [termGroup, setTermGroup] = useState(null)
+  const [course, setCourse] = useState(null)
+  const [modules, setModules] = useState([])
+  const [sessions, setSessions] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    async function loadDashboard() {
+      if (!session?.user?.id) return
+      setLoading(true)
+      setError('')
+
+      const { data: enrollmentData, error: enrollmentError } = await supabase
+        .from('batch_enrollments')
+        .select('*')
+        .eq('batch_id', batchId)
+        .eq('student_id', session.user.id)
+        .maybeSingle()
+
+      if (enrollmentError || !enrollmentData) {
+        setError(enrollmentError?.message ?? 'This batch is not connected to your student profile yet.')
+        setLoading(false)
+        return
+      }
+
+      const { data: batchData, error: batchError } = await supabase
+        .from('batches')
+        .select('*')
+        .eq('id', batchId)
+        .maybeSingle()
+
+      if (batchError || !batchData) {
+        setError(batchError?.message ?? 'Batch not found.')
+        setLoading(false)
+        return
+      }
+
+      const { data: termData, error: termError } = await supabase
+        .from('term_groups')
+        .select('*')
+        .eq('id', batchData.term_group_id)
+        .maybeSingle()
+
+      if (termError || !termData) {
+        setError(termError?.message ?? 'Term group not found for this batch.')
+        setLoading(false)
+        return
+      }
+
+      const [
+        { data: courseData },
+        { data: moduleRows },
+        { data: sessionRows, error: sessionsError },
+      ] = await Promise.all([
+        termData.course_id ? supabase.from('courses').select('*').eq('id', termData.course_id).maybeSingle() : Promise.resolve({ data: null }),
+        supabase.from('term_modules').select('*').eq('term_group_id', termData.id).order('module_number', { ascending: true }),
+        supabase.from('batch_sessions').select('*').eq('batch_id', batchId).order('scheduled_at', { ascending: true }),
+      ])
+
+      if (sessionsError) {
+        setError(sessionsError.message)
+        setLoading(false)
+        return
+      }
+
+      setBatch(batchData)
+      setTermGroup(termData)
+      setCourse(courseData ?? null)
+      setModules(moduleRows ?? [])
+      setSessions(sessionRows ?? [])
+      setLoading(false)
+    }
+
+    loadDashboard()
+  }, [batchId, session?.user?.id])
+
+  function isSameLocalDate(a, b) {
+    return a.getFullYear() === b.getFullYear()
+      && a.getMonth() === b.getMonth()
+      && a.getDate() === b.getDate()
+  }
+
+  function displayStatus(item) {
+    if (item.recording_url) return 'recorded'
+    if (!item.scheduled_at) return 'upcoming'
+    const scheduledAt = new Date(item.scheduled_at)
+    const now = new Date()
+    if (isSameLocalDate(scheduledAt, now) && item.zoom_link) return 'live'
+    if (scheduledAt < now) return 'concluded'
+    return 'upcoming'
+  }
+
+  function statusVariant(status) {
+    if (status === 'recorded') return 'success'
+    if (status === 'live') return 'accent'
+    return 'default'
+  }
+
+  function statusCopy(status) {
+    if (status === 'recorded') return 'Recording available'
+    if (status === 'live') return 'Live class link is ready'
+    if (status === 'concluded') return 'Class concluded; recording will appear here when attached'
+    return 'Upcoming class'
+  }
+
+  function formatDateTime(value) {
+    if (!value) return 'Schedule not set'
+    return new Date(value).toLocaleString('en-IN', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    })
+  }
+
+  const sessionsByModule = sessions.reduce((acc, item) => {
+    acc[item.term_module_id] = [...(acc[item.term_module_id] ?? []), item]
+    return acc
+  }, {})
+  const recordedCount = sessions.filter((item) => item.recording_url).length
+  const nextSession = sessions.find((item) => item.scheduled_at && new Date(item.scheduled_at).getTime() >= Date.now()) ?? null
+
+  if (loading) return <div className="py-16 text-center text-sm text-ink-muted">Loading your batch...</div>
+
+  if (error || !batch) {
+    return (
+      <div className="rounded-2xl border border-dashed border-border bg-surface px-6 py-16 text-center">
+        <Users className="mx-auto mb-3 text-ink-soft" size={34} />
+        <p className="font-display text-xl font-semibold">Could not open this batch.</p>
+        <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-ink-muted">{error || 'This batch is not available for your account.'}</p>
+        <Button className="mt-5" onClick={() => navigate('/learning')}>Back to My Learning</Button>
       </div>
     )
   }
 
   return (
-    <div className="space-y-7">
-      <section className="grid gap-6 rounded-2xl border border-border bg-surface p-5 shadow-sm lg:grid-cols-[0.42fr_0.58fr] lg:p-6">
-        {featuredItem.course.thumbnail_url
-          ? <img src={featuredItem.course.thumbnail_url} alt={featuredItem.course.title} className="min-h-[220px] rounded-2xl object-cover" />
-          : <ArtPanel label={featuredItem.course.art ?? art.srinivasa} className="min-h-[220px]" />
-        }
-        <div className="flex flex-col justify-center">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-[0.25em] text-primary">Continue your practice</p>
-          <h2 className="font-display text-3xl font-medium">{featuredItem.course.title}</h2>
-          <p className="mt-1 text-sm text-ink-muted">By {featuredItem.course.instructor ?? 'Drdha Vrata Gorrick'}</p>
-          <Progress value={featuredItem.progress} className="mt-6" />
-          <p className="mt-3 text-sm text-ink-muted">{featuredItem.progress}% complete - {featuredItem.label}</p>
-          <p className="mt-3">You left off at: <span className="font-semibold">{featuredItem.lastSessionTitle}</span></p>
-          <div className="mt-6 flex flex-wrap gap-3">
-            <Link to={`/courses/${featuredItem.course.id}/lesson/${featuredItem.lastSessionId}`}><Button>Resume</Button></Link>
-            <Link to={`/courses/${featuredItem.course.id}`}><Button variant="ghost">View course</Button></Link>
+    <div className="space-y-6">
+      <button type="button" onClick={() => navigate('/learning')} className="inline-flex items-center gap-2 text-sm font-semibold text-primary">
+        <ChevronLeft size={16} />
+        Back to My Learning
+      </button>
+
+      <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
+        <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-primary">My Program</p>
+            <h2 className="mt-2 font-display text-3xl font-semibold">{course?.title ?? 'Long-course program'}</h2>
+            <p className="mt-2 text-sm text-ink-muted">{termGroup?.name ?? 'Term group'} · {batch.name}{batch.schedule_note ? ` · ${batch.schedule_note}` : ''}</p>
+          </div>
+          <Badge variant={batch.status === 'active' ? 'success' : 'default'}>{batch.status ?? 'active'}</Badge>
+        </div>
+        <div className="mt-5 grid gap-3 md:grid-cols-4">
+          <div className="rounded-xl border border-border bg-surface-warm p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Modules</p>
+            <p className="mt-1 font-display text-xl font-semibold">{modules.length}</p>
+          </div>
+          <div className="rounded-xl border border-border bg-surface-warm p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Sessions</p>
+            <p className="mt-1 font-display text-xl font-semibold">{sessions.length}</p>
+          </div>
+          <div className="rounded-xl border border-border bg-surface-warm p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Recordings</p>
+            <p className="mt-1 font-display text-xl font-semibold">{recordedCount}</p>
+          </div>
+          <div className="rounded-xl border border-border bg-surface-warm p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Next class</p>
+            <p className="mt-1 text-sm font-semibold">{nextSession ? formatDateTime(nextSession.scheduled_at) : 'Not scheduled'}</p>
           </div>
         </div>
       </section>
-      <SectionTitle title="Your Courses" />
-      <div className="grid gap-5 md:grid-cols-2">{learningItems.map((item) => (
-        <CourseCard
-          key={item.enrollment.id}
-          course={item.course}
-          progress={item.progress}
-          lastSessionId={item.lastSessionId}
-        />
-      ))}</div>
-      <JournalPreview />
-      <WorkshopBanner />
+
+      <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
+        <SectionTitle title="Modules & Sessions" subtitle="Your batch's live classes, recordings, and Zoom links." />
+
+        <div className="mt-5 space-y-4">
+          {modules.length ? modules.map((module) => {
+            const moduleSessions = sessionsByModule[module.id] ?? []
+            return (
+              <article key={module.id} className="rounded-xl border border-border bg-surface-warm p-4">
+                <div className="flex gap-3">
+                  <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary-soft font-display text-lg font-semibold text-primary">
+                    {module.module_number}
+                  </div>
+                  <div>
+                    <h3 className="font-display text-xl font-semibold">{module.title}</h3>
+                    <p className="mt-1 text-sm text-ink-muted">{moduleSessions.length ? `${moduleSessions.length} class${moduleSessions.length === 1 ? '' : 'es'} in this module` : 'No live classes scheduled for this module yet.'}</p>
+                  </div>
+                </div>
+
+                <div className="mt-4 space-y-3">
+                  {moduleSessions.length ? moduleSessions.map((item) => {
+                    const status = displayStatus(item)
+                    return (
+                      <div key={item.id} className="rounded-xl border border-border bg-surface p-4">
+                        <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h4 className="font-display text-lg font-semibold">{item.title}</h4>
+                              <Badge variant={statusVariant(status)}>{status}</Badge>
+                            </div>
+                            <p className="mt-1 text-sm text-ink-muted">{formatDateTime(item.scheduled_at)}</p>
+                            <p className="mt-1 text-xs text-ink-muted">{statusCopy(status)}</p>
+                          </div>
+                          <div className="flex flex-wrap gap-2 md:justify-end">
+                            {(status === 'live' || status === 'upcoming') && item.zoom_link && (
+                              <a href={item.zoom_link} target="_blank" rel="noreferrer">
+                                <Button>Join Zoom</Button>
+                              </a>
+                            )}
+                            {item.recording_url && (
+                              <a href={item.recording_url} target="_blank" rel="noreferrer">
+                                <Button variant="secondary">Watch Recording</Button>
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  }) : (
+                    <div className="rounded-xl border border-dashed border-border bg-surface px-4 py-6 text-center">
+                      <p className="font-display text-lg font-semibold">No sessions here yet.</p>
+                      <p className="mt-1 text-sm text-ink-muted">Drdha can schedule this batch's live class from the admin studio.</p>
+                    </div>
+                  )}
+                </div>
+              </article>
+            )
+          }) : (
+            <div className="rounded-2xl border border-dashed border-border bg-surface-warm px-6 py-14 text-center">
+              <Layers className="mx-auto mb-3 text-ink-soft" size={34} />
+              <p className="font-display text-xl font-semibold">Your syllabus will appear here soon.</p>
+              <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-ink-muted">Once shared modules are added to this term group, your batch dashboard will show the full learning path.</p>
+            </div>
+          )}
+        </div>
+      </section>
     </div>
   )
 }
@@ -1387,7 +1998,7 @@ function WorkshopCard({ workshop }) {
 function CourseDetail() {
   const { courseId } = useParams()
   const navigate = useNavigate()
-  const { session } = useAuth()
+  const { session, profile, refreshProfile } = useAuth()
   const fallbackCourse = courses.find((c) => c.id === courseId) || courses[0]
   const [course, setCourse] = useState(null)
   const [courseSessions, setCourseSessions] = useState([])
@@ -1395,6 +2006,7 @@ function CourseDetail() {
   const [loading, setLoading] = useState(true)
   const [enrolling, setEnrolling] = useState(false)
   const [enrollError, setEnrollError] = useState('')
+  const [longCourseRequested, setLongCourseRequested] = useState(false)
   const [open, setOpen] = useState('Who is this course for?')
   const [activeTab, setActiveTab] = useState('About')
 
@@ -1415,11 +2027,17 @@ function CourseDetail() {
       setCourse(courseData ?? null)
       setCourseSessions(sessionsData ?? [])
       setEnrollment(enrollmentData ?? null)
+      const loadedCourse = courseData ?? fallbackCourse
+      if (loadedCourse?.course_type === 'long' && profile?.payment_notes) {
+        setLongCourseRequested(profile.payment_notes.includes(`Long-course interest: ${loadedCourse.title}`))
+      } else {
+        setLongCourseRequested(false)
+      }
       setLoading(false)
     }
 
     loadCourseDetail()
-  }, [courseId, session?.user?.id])
+  }, [courseId, session?.user?.id, profile?.payment_notes])
 
   const displayCourse = course ?? fallbackCourse
   const previewSession = courseSessions.find((session) => session.is_preview) ?? courseSessions[0] ?? null
@@ -1442,6 +2060,43 @@ function CourseDetail() {
     if (normalizeCourseStatus(displayCourse.status) === 'coming_soon') return
     if (!session?.user?.id) {
       setEnrollError('Please sign in before enrolling.')
+      return
+    }
+
+    const isLongCourse = displayCourse.course_type === 'long'
+    if (isLongCourse) {
+      if (longCourseRequested) {
+        navigate('/learning')
+        return
+      }
+
+      setEnrolling(true)
+      const interestNote = `Long-course interest: ${displayCourse.title}`
+      const existingNotes = profile?.payment_notes ?? ''
+      const nextNotes = existingNotes.includes(interestNote)
+        ? existingNotes
+        : [existingNotes, interestNote].filter(Boolean).join('\n')
+
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({
+          admission_status: profile?.admission_status === 'enrolled' ? 'enrolled' : 'prospect',
+          fee_status: profile?.fee_status ?? 'pending',
+          currency: profile?.currency ?? (profile?.country === 'India' ? 'INR' : 'USD'),
+          payment_notes: nextNotes,
+        })
+        .eq('id', session.user.id)
+
+      setEnrolling(false)
+
+      if (profileError) {
+        setEnrollError(profileError.message)
+        return
+      }
+
+      setLongCourseRequested(true)
+      await refreshProfile(session.user.id)
+      navigate('/learning')
       return
     }
 
@@ -1488,6 +2143,22 @@ function CourseDetail() {
       return
     }
 
+    const shortCourseNote = `Short-course enrollment: ${displayCourse.title}`
+    const existingNotes = profile?.payment_notes ?? ''
+    const nextNotes = existingNotes.includes(shortCourseNote)
+      ? existingNotes
+      : [existingNotes, shortCourseNote].filter(Boolean).join('\n')
+
+    await supabase
+      .from('profiles')
+      .update({
+        admission_status: 'enrolled',
+        fee_status: profile?.fee_status ?? 'pending',
+        currency: profile?.currency ?? (profile?.country === 'India' ? 'INR' : 'USD'),
+        payment_notes: nextNotes,
+      })
+      .eq('id', session.user.id)
+    await refreshProfile(session.user.id)
     setEnrollment(data)
     navigate(target)
   }
@@ -1513,6 +2184,7 @@ function CourseDetail() {
       enrollment={enrollment}
       enrolling={enrolling}
       enrollError={enrollError}
+      longCourseRequested={longCourseRequested}
       onEnroll={handleEnroll}
     />
   )
@@ -1681,22 +2353,32 @@ function CourseDetailTabs({
   enrollment,
   enrolling,
   enrollError,
+  longCourseRequested,
   onEnroll,
 }) {
   const isComingSoon = normalizeCourseStatus(displayCourse.status) === 'coming_soon'
-  const enrollLabel = isComingSoon ? 'Notify me' : enrollment ? 'Continue Learning' : enrolling ? 'Enrolling...' : 'Enroll Now'
-  const stickyEnrollLabel = isComingSoon ? 'Notify me when it launches' : enrollment ? 'Continue Learning' : enrolling ? 'Enrolling...' : 'Enroll Now'
+  const isLongCourse = displayCourse.course_type === 'long'
+  const enrollLabel = isComingSoon
+    ? 'Notify me'
+    : isLongCourse
+      ? longCourseRequested ? 'View My Learning' : enrolling ? 'Requesting...' : 'Request Batch Placement'
+      : enrollment ? 'Continue Learning' : enrolling ? 'Enrolling...' : 'Enroll Now'
+  const stickyEnrollLabel = isComingSoon
+    ? 'Notify me when it launches'
+    : isLongCourse
+      ? longCourseRequested ? 'View My Learning' : enrolling ? 'Requesting...' : 'Request Batch Placement'
+      : enrollment ? 'Continue Learning' : enrolling ? 'Enrolling...' : 'Enroll Now'
   const pill = 'rounded-full bg-[#ede0ba] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#9a7a3a]'
   const eyebrow = 'text-[10px] font-semibold uppercase tracking-[0.26em] text-[#9a7a3a]'
   const sectionHeading = 'mt-1.5 font-display text-[1.35rem] font-semibold leading-snug text-[#1a1208]'
   const divider = 'border-t border-[#e8d8a8]'
 
   const courseFacts = [
-    { label: 'Sessions', value: sessionCount ? `${sessionCount} lessons` : 'Coming soon' },
+    { label: isLongCourse ? 'Live sessions' : 'Sessions', value: isLongCourse ? 'Batch-wise' : sessionCount ? `${sessionCount} lessons` : 'Coming soon' },
     { label: 'Level', value: displayCourse.level ?? 'All levels' },
-    { label: 'Duration', value: displayCourse.duration_label ?? 'Self-paced' },
+    { label: 'Duration', value: displayCourse.duration_label ?? (isLongCourse ? 'Cohort pace' : 'Self-paced') },
     { label: 'Certificate', value: displayCourse.certificate_enabled !== false ? 'Included' : 'Not included' },
-    { label: 'Format', value: isComingSoon ? 'Coming soon' : 'Self-paced' },
+    { label: 'Format', value: isComingSoon ? 'Coming soon' : isLongCourse ? 'Live cohort' : 'Self-paced' },
   ]
 
   return (
@@ -1709,7 +2391,7 @@ function CourseDetailTabs({
           {/* Left: title block */}
           <div>
             <p className={eyebrow}>
-              Recorded course · {sessionCount || '—'} sessions
+              {isLongCourse ? 'Long course · Batch-wise live classes' : `Recorded course · ${sessionCount || '-'} sessions`}
             </p>
             <h1 className="mt-3 max-w-xl font-display text-[1.9rem] font-semibold leading-[1.2] text-[#1a1208] sm:text-[2.25rem]">
               {displayCourse.title}
@@ -1718,7 +2400,7 @@ function CourseDetailTabs({
             <div className="mt-4 flex flex-wrap gap-2">
               {displayCourse.level && <span className={pill}>{displayCourse.level}</span>}
               {displayCourse.duration_label && <span className={pill}>{displayCourse.duration_label}</span>}
-              <span className={pill}>{isComingSoon ? 'Coming Soon' : 'Self-paced'}</span>
+              <span className={pill}>{isComingSoon ? 'Coming Soon' : isLongCourse ? 'Live cohort' : 'Self-paced'}</span>
             </div>
 
             {/* Price + CTA — visible on all screen sizes */}
@@ -1732,6 +2414,11 @@ function CourseDetailTabs({
               )}
             </div>
             {enrollError && <p className="mt-3 text-[12px] font-semibold text-error">{enrollError}</p>}
+            {isLongCourse && longCourseRequested && (
+              <p className="mt-3 rounded-lg border border-success/20 bg-success/5 px-3 py-2 text-[12px] font-semibold text-success">
+                Your request is in the CRM. Drdha can now place you into the right batch.
+              </p>
+            )}
           </div>
 
           {/* Right: trailer */}
@@ -1775,13 +2462,19 @@ function CourseDetailTabs({
             <div className="flex items-baseline justify-between gap-4">
               <div>
                 <p className={eyebrow}>Curriculum</p>
-                <h2 className={sectionHeading}>Course sessions</h2>
+                <h2 className={sectionHeading}>{isLongCourse ? 'Shared syllabus' : 'Course sessions'}</h2>
               </div>
-              {sessionCount > 0 && (
+              {!isLongCourse && sessionCount > 0 && (
                 <span className="shrink-0 text-[12px] text-[#9a7a3a]">{sessionCount} sessions</span>
               )}
             </div>
-            <div className="mt-5 space-y-2">
+            {isLongCourse && (
+              <div className="mt-5 rounded-xl border border-[#ddc990] bg-[#faf3e4] px-5 py-6">
+                <p className="text-[13px] font-semibold text-[#1a1208]">Live classes are scheduled inside each batch.</p>
+                <p className="mt-1 text-[12px] leading-6 text-[#7a6040]">This course page is the public program shell. Once Drdha places you into a batch, My Program shows your batch sessions, Zoom links, and recordings.</p>
+              </div>
+            )}
+            {!isLongCourse && <div className="mt-5 space-y-2">
               {courseSessions.length ? courseSessions.map((session, idx) => (
                 <SessionPill key={session.id} session={session} idx={idx} courseId={displayCourse.id} isEnrolled={!!enrollment} />
               )) : (
@@ -1790,7 +2483,7 @@ function CourseDetailTabs({
                   <p className="mt-1 text-[12px] text-[#9a7a3a]">The course shell is ready — add the first session from the admin builder.</p>
                 </div>
               )}
-            </div>
+            </div>}
           </section>
 
           <div className={divider} />
@@ -1874,6 +2567,11 @@ function CourseDetailTabs({
               )}
             </div>
             {enrollError && <p className="mt-3 text-[12px] font-semibold text-error">{enrollError}</p>}
+            {isLongCourse && longCourseRequested && (
+              <p className="mt-3 rounded-lg border border-success/20 bg-success/5 px-3 py-2 text-[12px] font-semibold text-success">
+                Request saved. Admin batch placement is the next step.
+              </p>
+            )}
             <div className="mt-5 space-y-2.5 border-t border-[#ede0ba] pt-4">
               {courseFacts.map(({ label, value }) => (
                 <div key={label} className="flex items-baseline justify-between gap-2">
@@ -2944,6 +3642,7 @@ function AdminShell() {
         <nav className="mt-6 space-y-1.5 px-2.5">
           <AdminNavItem to="/admin" icon={BarChart3} label="Dashboard" collapsed={collapsed} end />
           <AdminNavItem to="/admin/courses" icon={BookOpen} label="Courses" collapsed={collapsed} />
+          <AdminNavItem to="/admin/term-groups" icon={Layers} label="Term Groups" collapsed={collapsed} />
           <AdminNavItem to="/admin/assignments" icon={ClipboardCheck} label="Assignments" collapsed={collapsed} />
           <AdminNavItem to="/admin/students" icon={Users} label="Students" collapsed={collapsed} />
           <AdminNavItem to="/admin/settings" icon={Settings} label="Demo Guide" collapsed={collapsed} />
@@ -2992,9 +3691,12 @@ function AdminShell() {
             <Route path="courses" element={<AdminCourses />} />
             <Route path="courses/new" element={<AdminCourseEditor />} />
             <Route path="courses/:courseId" element={<AdminCourseEditor />} />
+            <Route path="term-groups" element={<AdminTermGroups />} />
+            <Route path="term-groups/:termGroupId" element={<AdminTermGroupDetail />} />
+            <Route path="batches/:batchId" element={<AdminBatchPlaceholder />} />
             <Route path="playlists" element={<AdminPlaylists />} />
             <Route path="assignments" element={<AdminAssignments />} />
-            <Route path="students" element={<AdminStudents />} />
+            <Route path="students" element={<AdminStudentsCRM />} />
             <Route path="workshops" element={<AdminWorkshops />} />
             <Route path="settings" element={<AdminSettings />} />
           </Routes>
@@ -3006,6 +3708,9 @@ function AdminShell() {
 
 function getAdminTitle(pathname) {
   if (pathname.includes('/cards')) return 'Card Library'
+  if (pathname.includes('/batches/')) return 'Batch Detail'
+  if (pathname.includes('/term-groups/')) return 'Term Group Detail'
+  if (pathname.includes('/term-groups')) return 'Term Groups'
   if (pathname.includes('/courses/')) return 'Edit Course'
   if (pathname.includes('/courses')) return 'Course Builder'
   if (pathname.includes('/playlists')) return 'Playlist Builder'
@@ -3113,10 +3818,11 @@ function AdminDashboard() {
             </div>
             <Link to="/admin/assignments"><Button className="mt-5 w-full">Open review queue</Button></Link>
           </div>
-          <div className="grid gap-4 md:grid-cols-3">
-            <DemoMetricCard icon={BookOpen} label="Courses" value="Ready to publish" copy="Create course pages, sessions, videos, references, and resources." to="/admin/courses" />
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <DemoMetricCard icon={BookOpen} label="Courses" value="Ready to publish" copy="Create short-course pages and long-course shells for the student catalog." to="/admin/courses" />
+            <DemoMetricCard icon={Layers} label="Term Groups" value="Cohort model" copy="Manage intakes, batches, live sessions, Zoom links, and recordings." to="/admin/term-groups" />
             <DemoMetricCard icon={ClipboardCheck} label="Reviews" value="Live feedback loop" copy="Annotate uploaded work, record voice notes, and approve practice." to="/admin/assignments" />
-            <DemoMetricCard icon={Users} label="Students" value="Enrollment view" copy="See who enrolled and what each student is practicing." to="/admin/students" />
+            <DemoMetricCard icon={Users} label="Students" value="CRM view" copy="Track prospects, enrollments, fees, course interest, and batch placement." to="/admin/students" />
           </div>
         </div>
         <AdminContentMap />
@@ -3689,6 +4395,7 @@ function AdminCourseEditor() {
   const [sessionCountLabel, setSessionCountLabel] = useState('')
   const [level, setLevel] = useState('')
   const [status, setStatus] = useState('draft')
+  const [courseType, setCourseType] = useState('short')
   const [trailerUrl, setTrailerUrl] = useState('')
   const [whoIsThisFor, setWhoIsThisFor] = useState('')
   const [materialsNeeded, setMaterialsNeeded] = useState('')
@@ -3717,6 +4424,7 @@ function AdminCourseEditor() {
         setSessionCountLabel(courseData.session_count ? String(courseData.session_count) : '')
         setLevel(courseData.level ?? '')
         setStatus(normalizeCourseStatus(courseData.status))
+        setCourseType(courseData.course_type ?? 'short')
         setTrailerUrl(courseData.trailer_url ?? '')
         setWhoIsThisFor(courseData.who_is_this_for ?? '')
         setMaterialsNeeded(courseData.materials_needed ?? '')
@@ -3760,6 +4468,7 @@ function AdminCourseEditor() {
       duration_label: durationLabel.trim() || null,
       level: level.trim() || null,
       status,
+      course_type: courseType,
       thumbnail_url: thumbnailUrl,
       instructor_id: course?.instructor_id ?? profile?.id,
     }
@@ -3948,6 +4657,13 @@ function AdminCourseEditor() {
                 <option value="published">Published</option>
               </select>
             </label>
+            <label className="block">
+              <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-ink-muted">Course type</span>
+              <select className="w-full rounded-lg border border-border bg-surface px-4 py-3 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15" value={courseType} onChange={(e) => setCourseType(e.target.value)}>
+                <option value="short">Short course</option>
+                <option value="long">Long course</option>
+              </select>
+            </label>
           </div>
           <label className="block">
             <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-ink-muted">Description</span>
@@ -4066,7 +4782,10 @@ function CourseAdminCard({ course, enrollments = [], onStatusChange, onDelete })
       <div className="p-4">
         <div className="flex items-start justify-between gap-3">
           <h3 className="font-display text-xl font-semibold leading-snug">{course.title}</h3>
-          <Badge variant={variant}>{label}</Badge>
+          <div className="flex shrink-0 flex-col items-end gap-1.5">
+            <Badge variant={variant}>{label}</Badge>
+            <Badge variant={course.course_type === 'long' ? 'accent' : 'default'}>{course.course_type === 'long' ? 'Long' : 'Short'}</Badge>
+          </div>
         </div>
         <p className="mt-2 text-sm text-ink-muted">{course.duration_label ?? '—'} · {priceDisplay}</p>
         <div className="mt-3 rounded-xl border border-border bg-surface-warm px-3 py-2">
@@ -4091,6 +4810,969 @@ function CourseAdminCard({ course, enrollments = [], onStatusChange, onDelete })
         </div>
       </div>
     </article>
+  )
+}
+
+function AdminTermGroups() {
+  const navigate = useNavigate()
+  const [termGroups, setTermGroups] = useState([])
+  const [longCourses, setLongCourses] = useState([])
+  const [batchCounts, setBatchCounts] = useState({})
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [showForm, setShowForm] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [formError, setFormError] = useState('')
+  const [termName, setTermName] = useState('')
+  const [courseId, setCourseId] = useState('')
+  const [startDate, setStartDate] = useState('')
+
+  async function loadTermGroups() {
+    setLoading(true)
+    setError('')
+
+    const [{ data: courseRows, error: courseError }, { data: termRows, error: termError }, { data: batchRows, error: batchError }] = await Promise.all([
+      supabase.from('courses').select('id, title, course_type, status').eq('course_type', 'long').order('title', { ascending: true }),
+      supabase.from('term_groups').select('*').order('start_date', { ascending: false }),
+      supabase.from('batches').select('id, term_group_id'),
+    ])
+
+    const firstError = courseError || termError || batchError
+    if (firstError) {
+      setError(firstError.message)
+      setLongCourses([])
+      setTermGroups([])
+      setBatchCounts({})
+      setLoading(false)
+      return
+    }
+
+    const coursesList = courseRows ?? []
+    const coursesById = Object.fromEntries(coursesList.map((course) => [course.id, course]))
+    const counts = (batchRows ?? []).reduce((acc, batch) => {
+      acc[batch.term_group_id] = (acc[batch.term_group_id] ?? 0) + 1
+      return acc
+    }, {})
+
+    setLongCourses(coursesList)
+    setCourseId((current) => current || coursesList[0]?.id || '')
+    setTermGroups((termRows ?? []).map((termGroup) => ({
+      ...termGroup,
+      course: coursesById[termGroup.course_id] ?? null,
+    })))
+    setBatchCounts(counts)
+    setLoading(false)
+  }
+
+  useEffect(() => { loadTermGroups() }, [])
+
+  async function handleCreateTermGroup(event) {
+    event.preventDefault()
+    if (!termName.trim() || !courseId) {
+      setFormError('Choose a long course and name this intake.')
+      return
+    }
+
+    setSaving(true)
+    setFormError('')
+    const { data, error: insertError } = await supabase
+      .from('term_groups')
+      .insert({
+        name: termName.trim(),
+        course_id: courseId,
+        start_date: startDate || null,
+        status: 'active',
+      })
+      .select()
+      .single()
+
+    if (insertError) {
+      setFormError(insertError.message)
+    } else {
+      setTermName('')
+      setStartDate('')
+      setShowForm(false)
+      await loadTermGroups()
+      if (data?.id) navigate(`/admin/term-groups/${data.id}`)
+    }
+    setSaving(false)
+  }
+
+  function formatDate(value) {
+    if (!value) return 'Start date not set'
+    return new Date(value).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+  }
+
+  if (loading) return <div className="py-16 text-center text-sm text-ink-muted">Loading term groups...</div>
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+        <SectionTitle title="Term Groups" subtitle="Create long-course intakes, then open each intake to manage its batches." />
+        <Button onClick={() => setShowForm((current) => !current)}><Plus className="mr-2 inline" size={15} />Create Term Group</Button>
+      </div>
+
+      {error && (
+        <div className="rounded-2xl border border-error/20 bg-error/5 p-5 text-error">
+          <p className="font-display text-lg font-semibold">Could not load term groups.</p>
+          <p className="mt-1 text-sm">{error}</p>
+        </div>
+      )}
+
+      {!longCourses.length ? (
+        <div className="rounded-2xl border border-dashed border-border bg-surface px-6 py-16 text-center">
+          <Layers className="mx-auto mb-3 text-ink-soft" size={34} />
+          <p className="font-display text-xl font-semibold">Create a long course first.</p>
+          <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-ink-muted">Term groups are intakes for long courses. Open the course editor, create or choose a course, and set its course type to Long Course.</p>
+          <Link to="/admin/courses/new"><Button className="mt-5">Create long course</Button></Link>
+        </div>
+      ) : (
+        <>
+          {showForm && (
+            <AdminEditor title="Create Term Group" action={saving ? 'Creating...' : 'Create intake'} onSubmit={handleCreateTermGroup}>
+              <Input label="Term group name" placeholder="October 2024" value={termName} onChange={(e) => setTermName(e.target.value)} required />
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="block">
+                  <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-ink-muted">Long course</span>
+                  <select className="w-full rounded-lg border border-border bg-surface px-4 py-3 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15" value={courseId} onChange={(e) => setCourseId(e.target.value)}>
+                    {longCourses.map((course) => <option key={course.id} value={course.id}>{course.title}</option>)}
+                  </select>
+                </label>
+                <Input label="Start date" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+              </div>
+              {formError && <p className="text-sm text-error">{formError}</p>}
+            </AdminEditor>
+          )}
+
+          {termGroups.length ? (
+            <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+              {termGroups.map((termGroup) => (
+                <Link key={termGroup.id} to={`/admin/term-groups/${termGroup.id}`} className="block">
+                  <article className="h-full rounded-2xl border border-border bg-surface p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-primary/60 hover:shadow-md">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">Intake</p>
+                        <h3 className="mt-2 font-display text-2xl font-semibold">{termGroup.name}</h3>
+                      </div>
+                      <Badge variant={termGroup.status === 'active' ? 'success' : 'default'}>{termGroup.status ?? 'active'}</Badge>
+                    </div>
+                    <p className="mt-3 text-sm font-semibold text-ink">{termGroup.course?.title ?? 'Long course not found'}</p>
+                    <div className="mt-5 grid gap-3 rounded-xl border border-border bg-surface-warm p-3 text-sm text-ink-muted">
+                      <p><span className="font-semibold text-ink">Starts:</span> {formatDate(termGroup.start_date)}</p>
+                      <p><span className="font-semibold text-ink">Batches:</span> {batchCounts[termGroup.id] ?? 0}</p>
+                    </div>
+                  </article>
+                </Link>
+              ))}
+            </section>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-border bg-surface px-6 py-16 text-center">
+              <CalendarDays className="mx-auto mb-3 text-ink-soft" size={34} />
+              <p className="font-display text-xl font-semibold">No intakes yet.</p>
+              <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-ink-muted">Create the first intake, such as October 2024, then add batches for the different class timings.</p>
+              <Button className="mt-5" onClick={() => setShowForm(true)}>Create Term Group</Button>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+function AdminTermGroupDetail() {
+  const { termGroupId } = useParams()
+  const navigate = useNavigate()
+  const [termGroup, setTermGroup] = useState(null)
+  const [course, setCourse] = useState(null)
+  const [batches, setBatches] = useState([])
+  const [enrollmentCounts, setEnrollmentCounts] = useState({})
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [showForm, setShowForm] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [formError, setFormError] = useState('')
+  const [batchName, setBatchName] = useState('')
+  const [scheduleNote, setScheduleNote] = useState('')
+  const [seats, setSeats] = useState('')
+
+  async function loadTermGroupDetail() {
+    setLoading(true)
+    setError('')
+
+    const { data: termData, error: termError } = await supabase
+      .from('term_groups')
+      .select('*')
+      .eq('id', termGroupId)
+      .maybeSingle()
+
+    if (termError || !termData) {
+      setError(termError?.message ?? 'Term group not found.')
+      setTermGroup(null)
+      setCourse(null)
+      setBatches([])
+      setEnrollmentCounts({})
+      setLoading(false)
+      return
+    }
+
+    const [{ data: courseData }, { data: batchRows }, { data: enrollmentRows }] = await Promise.all([
+      termData.course_id ? supabase.from('courses').select('id, title, status, course_type').eq('id', termData.course_id).maybeSingle() : Promise.resolve({ data: null }),
+      supabase.from('batches').select('*').eq('term_group_id', termGroupId).order('created_at', { ascending: true }),
+      supabase.from('batch_enrollments').select('id, batch_id'),
+    ])
+
+    const counts = (enrollmentRows ?? []).reduce((acc, enrollment) => {
+      acc[enrollment.batch_id] = (acc[enrollment.batch_id] ?? 0) + 1
+      return acc
+    }, {})
+
+    setTermGroup(termData)
+    setCourse(courseData ?? null)
+    setBatches(batchRows ?? [])
+    setEnrollmentCounts(counts)
+    setLoading(false)
+  }
+
+  useEffect(() => { loadTermGroupDetail() }, [termGroupId])
+
+  async function handleCreateBatch(event) {
+    event.preventDefault()
+    if (!batchName.trim()) {
+      setFormError('Batch name is required.')
+      return
+    }
+
+    setSaving(true)
+    setFormError('')
+    const { data, error: insertError } = await supabase
+      .from('batches')
+      .insert({
+        term_group_id: termGroupId,
+        name: batchName.trim(),
+        schedule_note: scheduleNote.trim() || null,
+        seats: seats ? parseInt(seats) : null,
+        status: 'active',
+      })
+      .select()
+      .single()
+
+    if (insertError) {
+      setFormError(insertError.message)
+    } else {
+      setBatchName('')
+      setScheduleNote('')
+      setSeats('')
+      setShowForm(false)
+      await loadTermGroupDetail()
+      if (data?.id) navigate(`/admin/batches/${data.id}`)
+    }
+    setSaving(false)
+  }
+
+  function formatDate(value) {
+    if (!value) return 'Start date not set'
+    return new Date(value).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+  }
+
+  if (loading) return <div className="py-16 text-center text-sm text-ink-muted">Loading term group...</div>
+
+  if (error || !termGroup) {
+    return (
+      <div className="rounded-2xl border border-dashed border-border bg-surface px-6 py-16 text-center">
+        <p className="font-display text-xl font-semibold">Could not open this intake.</p>
+        <p className="mt-2 text-sm text-ink-muted">{error || 'The term group could not be found.'}</p>
+        <Button className="mt-5" onClick={() => navigate('/admin/term-groups')}>Back to Term Groups</Button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <button type="button" onClick={() => navigate('/admin/term-groups')} className="inline-flex items-center gap-2 text-sm font-semibold text-primary">
+          <ChevronLeft size={16} />
+          Back to Term Groups
+        </button>
+        <section className="mt-3 rounded-2xl border border-border bg-surface p-5 shadow-sm">
+          <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-primary">Long-course intake</p>
+              <h2 className="mt-2 font-display text-3xl font-semibold">{termGroup.name}</h2>
+              <p className="mt-2 text-sm text-ink-muted">{course?.title ?? 'Long course not found'}</p>
+            </div>
+            <Badge variant={termGroup.status === 'active' ? 'success' : 'default'}>{termGroup.status ?? 'active'}</Badge>
+          </div>
+          <div className="mt-5 grid gap-3 md:grid-cols-3">
+            <div className="rounded-xl border border-border bg-surface-warm p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Start date</p>
+              <p className="mt-1 font-semibold">{formatDate(termGroup.start_date)}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-surface-warm p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Batches</p>
+              <p className="mt-1 font-semibold">{batches.length}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-surface-warm p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Course type</p>
+              <p className="mt-1 font-semibold">{course?.course_type === 'long' ? 'Long course' : 'Not marked long'}</p>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+        <SectionTitle title="Batches" subtitle="Each batch is a time-slot cohort inside this intake." />
+        <Button onClick={() => setShowForm((current) => !current)}><Plus className="mr-2 inline" size={15} />Create Batch</Button>
+      </div>
+
+      {showForm && (
+        <AdminEditor title="Create Batch" action={saving ? 'Creating...' : 'Create batch'} onSubmit={handleCreateBatch}>
+          <div className="grid gap-4 md:grid-cols-2">
+            <Input label="Batch name" placeholder="Batch A" value={batchName} onChange={(e) => setBatchName(e.target.value)} required />
+            <Input label="Seats" type="number" min="0" value={seats} onChange={(e) => setSeats(e.target.value)} />
+          </div>
+          <Input label="Schedule note" placeholder="Fridays 7:00 AM IST" value={scheduleNote} onChange={(e) => setScheduleNote(e.target.value)} />
+          {formError && <p className="text-sm text-error">{formError}</p>}
+        </AdminEditor>
+      )}
+
+      {batches.length ? (
+        <section className="grid gap-5 md:grid-cols-2">
+          {batches.map((batch) => (
+            <Link key={batch.id} to={`/admin/batches/${batch.id}`} className="block">
+              <article className="h-full rounded-2xl border border-border bg-surface p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-primary/60 hover:shadow-md">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="font-display text-2xl font-semibold">{batch.name}</h3>
+                    <p className="mt-1 text-sm text-ink-muted">{batch.schedule_note ?? 'Schedule not set'}</p>
+                  </div>
+                  <Badge variant={batch.status === 'active' ? 'success' : 'default'}>{batch.status ?? 'active'}</Badge>
+                </div>
+                <div className="mt-5 grid gap-3 rounded-xl border border-border bg-surface-warm p-3 text-sm text-ink-muted sm:grid-cols-2">
+                  <p><span className="font-semibold text-ink">Seats:</span> {batch.seats ?? 'Not set'}</p>
+                  <p><span className="font-semibold text-ink">Students:</span> {enrollmentCounts[batch.id] ?? 0}</p>
+                </div>
+              </article>
+            </Link>
+          ))}
+        </section>
+      ) : (
+        <div className="rounded-2xl border border-dashed border-border bg-surface px-6 py-16 text-center">
+          <Users className="mx-auto mb-3 text-ink-soft" size={34} />
+          <p className="font-display text-xl font-semibold">No batches yet.</p>
+          <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-ink-muted">Create Batch A or Batch B to give students a clear class timing inside this intake.</p>
+          <Button className="mt-5" onClick={() => setShowForm(true)}>Create Batch</Button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function AdminBatchPlaceholder() {
+  const { batchId } = useParams()
+  const navigate = useNavigate()
+  const [batch, setBatch] = useState(null)
+  const [termGroup, setTermGroup] = useState(null)
+  const [course, setCourse] = useState(null)
+  const [modules, setModules] = useState([])
+  const [sessions, setSessions] = useState([])
+  const [enrolledStudents, setEnrolledStudents] = useState([])
+  const [availableStudents, setAvailableStudents] = useState([])
+  const [batchEnrollmentRows, setBatchEnrollmentRows] = useState([])
+  const [studentSearch, setStudentSearch] = useState('')
+  const [enrollStudentId, setEnrollStudentId] = useState('')
+  const [enrollmentSaving, setEnrollmentSaving] = useState(false)
+  const [enrollmentError, setEnrollmentError] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [showModuleForm, setShowModuleForm] = useState(false)
+  const [moduleNumber, setModuleNumber] = useState('')
+  const [moduleTitle, setModuleTitle] = useState('')
+  const [moduleSaving, setModuleSaving] = useState(false)
+  const [moduleError, setModuleError] = useState('')
+  const [sessionModuleId, setSessionModuleId] = useState('')
+  const [sessionTitle, setSessionTitle] = useState('')
+  const [sessionScheduledAt, setSessionScheduledAt] = useState('')
+  const [sessionZoomLink, setSessionZoomLink] = useState('')
+  const [sessionSaving, setSessionSaving] = useState(false)
+  const [sessionError, setSessionError] = useState('')
+  const [editingSessionId, setEditingSessionId] = useState('')
+  const [editSessionTitle, setEditSessionTitle] = useState('')
+  const [editSessionScheduledAt, setEditSessionScheduledAt] = useState('')
+  const [editSessionZoomLink, setEditSessionZoomLink] = useState('')
+  const [editSessionRecordingUrl, setEditSessionRecordingUrl] = useState('')
+
+  async function loadBatchDetail() {
+    setLoading(true)
+    setError('')
+
+    const { data: batchData, error: batchError } = await supabase
+      .from('batches')
+      .select('*')
+      .eq('id', batchId)
+      .maybeSingle()
+
+    if (batchError || !batchData) {
+      setError(batchError?.message ?? 'Batch not found.')
+      setBatch(null)
+      setTermGroup(null)
+      setCourse(null)
+      setModules([])
+      setSessions([])
+      setEnrolledStudents([])
+      setAvailableStudents([])
+      setBatchEnrollmentRows([])
+      setLoading(false)
+      return
+    }
+
+    const { data: termData, error: termError } = await supabase
+      .from('term_groups')
+      .select('*')
+      .eq('id', batchData.term_group_id)
+      .maybeSingle()
+
+    if (termError || !termData) {
+      setError(termError?.message ?? 'Term group not found for this batch.')
+      setBatch(batchData)
+      setTermGroup(null)
+      setCourse(null)
+      setModules([])
+      setSessions([])
+      setEnrolledStudents([])
+      setAvailableStudents([])
+      setBatchEnrollmentRows([])
+      setLoading(false)
+      return
+    }
+
+    const [
+      { data: courseData },
+      { data: moduleRows },
+      { data: sessionRows, error: sessionsError },
+      { data: enrollmentRows, error: enrollmentsError },
+      { data: profileRows, error: profilesError },
+      { data: allBatchRows },
+    ] = await Promise.all([
+      termData.course_id ? supabase.from('courses').select('id, title, course_type, status').eq('id', termData.course_id).maybeSingle() : Promise.resolve({ data: null }),
+      supabase.from('term_modules').select('*').eq('term_group_id', termData.id).order('module_number', { ascending: true }),
+      supabase.from('batch_sessions').select('*').eq('batch_id', batchId).order('scheduled_at', { ascending: true }),
+      supabase.from('batch_enrollments').select('*'),
+      supabase.from('profiles').select('id, name, email, phone, role').order('name', { ascending: true }),
+      supabase.from('batches').select('id, name, term_group_id'),
+    ])
+
+    const loadError = sessionsError || enrollmentsError || profilesError
+    if (loadError) setError(loadError.message)
+
+    const profilesById = Object.fromEntries((profileRows ?? []).map((profile) => [profile.id, profile]))
+    const batchesById = Object.fromEntries((allBatchRows ?? []).map((item) => [item.id, item]))
+    const enrollments = enrollmentRows ?? []
+    const studentsInBatch = enrollments
+      .filter((enrollment) => enrollment.batch_id === batchId)
+      .map((enrollment) => ({
+        enrollment,
+        profile: profilesById[enrollment.student_id] ?? null,
+      }))
+      .filter((item) => item.profile)
+
+    setBatch(batchData)
+    setTermGroup(termData)
+    setCourse(courseData ?? null)
+    setModules(moduleRows ?? [])
+    setSessions(sessionRows ?? [])
+    setBatchEnrollmentRows(enrollments.map((enrollment) => ({
+      ...enrollment,
+      batch: batchesById[enrollment.batch_id] ?? null,
+    })))
+    setEnrolledStudents(studentsInBatch)
+    setAvailableStudents((profileRows ?? []).filter((profile) => profile.role !== 'admin'))
+    setEnrollStudentId((current) => (profileRows ?? []).some((profile) => profile.id === current && profile.role !== 'admin') ? current : '')
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    loadBatchDetail()
+  }, [batchId])
+
+  function formatDate(value) {
+    if (!value) return 'Not scheduled'
+    return new Date(value).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+  }
+
+  function formatDateTime(value) {
+    if (!value) return 'Not scheduled'
+    return new Date(value).toLocaleString('en-IN', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    })
+  }
+
+  function toDateTimeInput(value) {
+    if (!value) return ''
+    const date = new Date(value)
+    const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+    return offsetDate.toISOString().slice(0, 16)
+  }
+
+  function fromDateTimeInput(value) {
+    return value ? new Date(value).toISOString() : null
+  }
+
+  function isSameLocalDate(a, b) {
+    return a.getFullYear() === b.getFullYear()
+      && a.getMonth() === b.getMonth()
+      && a.getDate() === b.getDate()
+  }
+
+  function getBatchSessionDisplayStatus(session) {
+    if (session.recording_url) return 'recorded'
+    if (!session.scheduled_at) return 'unscheduled'
+
+    const scheduledAt = new Date(session.scheduled_at)
+    const now = new Date()
+    if (isSameLocalDate(scheduledAt, now) && session.zoom_link) return 'live'
+    if (scheduledAt < now) return 'concluded'
+    return 'upcoming'
+  }
+
+  function getBatchSessionBadgeVariant(status) {
+    if (status === 'recorded') return 'success'
+    if (status === 'live') return 'accent'
+    return 'default'
+  }
+
+  function getBatchSessionStatusCopy(status) {
+    if (status === 'recorded') return 'Recording available'
+    if (status === 'concluded') return 'Class concluded; recording not attached yet'
+    if (status === 'live') return 'Scheduled for today'
+    if (status === 'unscheduled') return 'No date set'
+    return 'Future class'
+  }
+
+  const sessionsByModule = sessions.reduce((acc, session) => {
+    acc[session.term_module_id] = [...(acc[session.term_module_id] ?? []), session]
+    return acc
+  }, {})
+
+  async function handleAddModule(event) {
+    event.preventDefault()
+    if (!termGroup?.id) {
+      setModuleError('Open a valid intake before adding modules.')
+      return
+    }
+    if (!moduleNumber || !moduleTitle.trim()) {
+      setModuleError('Module number and title are required.')
+      return
+    }
+
+    setModuleSaving(true)
+    setModuleError('')
+    const { error: insertError } = await supabase
+      .from('term_modules')
+      .insert({
+        term_group_id: termGroup.id,
+        module_number: parseInt(moduleNumber),
+        title: moduleTitle.trim(),
+      })
+
+    if (insertError) {
+      setModuleError(insertError.message)
+    } else {
+      setModuleNumber('')
+      setModuleTitle('')
+      setShowModuleForm(false)
+      await loadBatchDetail()
+    }
+    setModuleSaving(false)
+  }
+
+  async function handleAddSession(event) {
+    event.preventDefault()
+    if (!sessionModuleId) {
+      setSessionError('Choose a module before adding a live session.')
+      return
+    }
+    if (!sessionTitle.trim()) {
+      setSessionError('Session title is required.')
+      return
+    }
+
+    setSessionSaving(true)
+    setSessionError('')
+    const { error: insertError } = await supabase
+      .from('batch_sessions')
+      .insert({
+        batch_id: batchId,
+        term_module_id: sessionModuleId,
+        title: sessionTitle.trim(),
+        scheduled_at: fromDateTimeInput(sessionScheduledAt),
+        zoom_link: sessionZoomLink.trim() || null,
+        status: 'upcoming',
+      })
+
+    if (insertError) {
+      setSessionError(insertError.message)
+    } else {
+      setSessionModuleId('')
+      setSessionTitle('')
+      setSessionScheduledAt('')
+      setSessionZoomLink('')
+      await loadBatchDetail()
+    }
+    setSessionSaving(false)
+  }
+
+  function startEditSession(session) {
+    setEditingSessionId(session.id)
+    setEditSessionTitle(session.title ?? '')
+    setEditSessionScheduledAt(toDateTimeInput(session.scheduled_at))
+    setEditSessionZoomLink(session.zoom_link ?? '')
+    setEditSessionRecordingUrl(session.recording_url ?? '')
+    setSessionError('')
+  }
+
+  async function handleSaveSession(sessionId) {
+    if (!editSessionTitle.trim()) {
+      setSessionError('Session title is required.')
+      return
+    }
+
+    setSessionSaving(true)
+    setSessionError('')
+    const updatePayload = {
+      title: editSessionTitle.trim(),
+      scheduled_at: fromDateTimeInput(editSessionScheduledAt),
+      zoom_link: editSessionZoomLink.trim() || null,
+      recording_url: editSessionRecordingUrl.trim() || null,
+    }
+    if (editSessionRecordingUrl.trim()) updatePayload.status = 'recorded'
+
+    const { error: updateError } = await supabase
+      .from('batch_sessions')
+      .update(updatePayload)
+      .eq('id', sessionId)
+
+    if (updateError) {
+      setSessionError(updateError.message)
+    } else {
+      setEditingSessionId('')
+      await loadBatchDetail()
+    }
+    setSessionSaving(false)
+  }
+
+  async function handleEnrollStudent(event) {
+    event.preventDefault()
+    if (!enrollStudentId) {
+      setEnrollmentError('Choose a student to enroll.')
+      return
+    }
+
+    const existingRows = batchEnrollmentRows.filter((row) => row.student_id === enrollStudentId)
+    const existingInThisBatch = existingRows.some((row) => row.batch_id === batchId)
+    if (existingInThisBatch) {
+      setEnrollmentError('This student is already enrolled in this batch.')
+      return
+    }
+
+    const otherEnrollment = existingRows.find((row) => row.batch_id !== batchId)
+    if (otherEnrollment) {
+      const otherBatchName = otherEnrollment.batch?.name ?? 'another batch'
+      const shouldMove = window.confirm(`This student is already in ${otherBatchName}. Move them to ${batch?.name ?? 'this batch'}?`)
+      if (!shouldMove) return
+    }
+
+    setEnrollmentSaving(true)
+    setEnrollmentError('')
+
+    if (otherEnrollment) {
+      const { error: deleteError } = await supabase
+        .from('batch_enrollments')
+        .delete()
+        .eq('student_id', enrollStudentId)
+
+      if (deleteError) {
+        setEnrollmentError(deleteError.message)
+        setEnrollmentSaving(false)
+        return
+      }
+    }
+
+    const { error: insertError } = await supabase
+      .from('batch_enrollments')
+      .insert({
+        batch_id: batchId,
+        student_id: enrollStudentId,
+      })
+
+    if (insertError) {
+      setEnrollmentError(insertError.code === '23505' ? 'This student is already enrolled in this batch.' : insertError.message)
+    } else {
+      setEnrollStudentId('')
+      setStudentSearch('')
+      await loadBatchDetail()
+    }
+    setEnrollmentSaving(false)
+  }
+
+  async function handleRemoveStudent(enrollmentId, studentName) {
+    const confirmed = window.confirm(`Remove ${studentName} from this batch?`)
+    if (!confirmed) return
+
+    setEnrollmentSaving(true)
+    setEnrollmentError('')
+    const { error: deleteError } = await supabase
+      .from('batch_enrollments')
+      .delete()
+      .eq('id', enrollmentId)
+
+    if (deleteError) {
+      setEnrollmentError(deleteError.message)
+    } else {
+      await loadBatchDetail()
+    }
+    setEnrollmentSaving(false)
+  }
+
+  const filteredAvailableStudents = availableStudents.filter((student) => {
+    const query = studentSearch.trim().toLowerCase()
+    if (!query) return true
+    return [student.name, student.email, student.phone]
+      .filter(Boolean)
+      .some((value) => value.toLowerCase().includes(query))
+  })
+
+  if (loading) return <div className="py-16 text-center text-sm text-ink-muted">Loading batch...</div>
+
+  if (error || !batch) {
+    return (
+      <div className="rounded-2xl border border-dashed border-border bg-surface px-6 py-16 text-center">
+        <p className="font-display text-xl font-semibold">Could not open this batch.</p>
+        <p className="mt-2 text-sm text-ink-muted">{error || 'The batch could not be found.'}</p>
+        <Button className="mt-5" onClick={() => navigate('/admin/term-groups')}>Back to Term Groups</Button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <button type="button" onClick={() => termGroup?.id ? navigate(`/admin/term-groups/${termGroup.id}`) : navigate('/admin/term-groups')} className="inline-flex items-center gap-2 text-sm font-semibold text-primary">
+          <ChevronLeft size={16} />
+          Back to intake
+        </button>
+        <section className="mt-3 rounded-2xl border border-border bg-surface p-5 shadow-sm">
+          <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-primary">Batch detail</p>
+              <h2 className="mt-2 font-display text-3xl font-semibold">{batch.name}</h2>
+              <p className="mt-2 text-sm text-ink-muted">{termGroup?.name ?? 'Intake not found'}{course?.title ? ` · ${course.title}` : ''}</p>
+            </div>
+            <Badge variant={batch.status === 'active' ? 'success' : 'default'}>{batch.status ?? 'active'}</Badge>
+          </div>
+          <div className="mt-5 grid gap-3 md:grid-cols-4">
+            <div className="rounded-xl border border-border bg-surface-warm p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Schedule</p>
+              <p className="mt-1 font-semibold">{batch.schedule_note ?? 'Not set'}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-surface-warm p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Seats</p>
+              <p className="mt-1 font-semibold">{batch.seats ?? 'Not set'}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-surface-warm p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Start date</p>
+              <p className="mt-1 font-semibold">{formatDate(termGroup?.start_date)}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-surface-warm p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Sessions</p>
+              <p className="mt-1 font-semibold">{sessions.length}</p>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
+        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+          <SectionTitle title="Modules" subtitle="Shared syllabus modules, with this batch's live classes under each one." />
+          <Button onClick={() => setShowModuleForm((current) => !current)}><Plus className="mr-2 inline" size={15} />Add Module</Button>
+        </div>
+
+        {showModuleForm && (
+          <form onSubmit={handleAddModule} className="mt-5 rounded-xl border border-border bg-surface-warm p-4">
+            <div className="grid gap-4 md:grid-cols-[140px_1fr_auto] md:items-end">
+              <Input label="Module number" type="number" min="1" value={moduleNumber} onChange={(e) => setModuleNumber(e.target.value)} />
+              <Input label="Module title" placeholder="Foundations of Sacred Geometry" value={moduleTitle} onChange={(e) => setModuleTitle(e.target.value)} />
+              <Button type="submit" disabled={moduleSaving}>{moduleSaving ? 'Adding...' : 'Save module'}</Button>
+            </div>
+            {moduleError && <p className="mt-3 text-sm text-error">{moduleError}</p>}
+          </form>
+        )}
+
+        {sessionError && <p className="mt-4 rounded-lg border border-error/20 bg-error/5 px-4 py-2 text-sm text-error">{sessionError}</p>}
+
+        <div className="mt-5 space-y-4">
+          {modules.length ? modules.map((module) => {
+            const moduleSessions = sessionsByModule[module.id] ?? []
+            const addingHere = sessionModuleId === module.id
+            return (
+              <article key={module.id} className="rounded-xl border border-border bg-surface-warm p-4">
+                <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+                  <div className="flex gap-3">
+                    <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary-soft font-display text-lg font-semibold text-primary">
+                      {module.module_number}
+                    </div>
+                    <div>
+                      <h3 className="font-display text-xl font-semibold">{module.title}</h3>
+                      <p className="mt-1 text-sm text-ink-muted">{moduleSessions.length ? `${moduleSessions.length} live session${moduleSessions.length === 1 ? '' : 's'} in this batch` : 'No live sessions scheduled for this batch yet.'}</p>
+                    </div>
+                  </div>
+                  <Button variant="secondary" onClick={() => setSessionModuleId(addingHere ? '' : module.id)}>
+                    {addingHere ? 'Close' : 'Add Session'}
+                  </Button>
+                </div>
+
+                {addingHere && (
+                  <form onSubmit={handleAddSession} className="mt-4 rounded-xl border border-border bg-surface p-4">
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <Input label="Session title" placeholder="Live Class: Shoulder Line and Torso Ratios" value={sessionTitle} onChange={(e) => setSessionTitle(e.target.value)} />
+                      <Input label="Scheduled date and time" type="datetime-local" value={sessionScheduledAt} onChange={(e) => setSessionScheduledAt(e.target.value)} />
+                    </div>
+                    <div className="mt-4 grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
+                      <Input label="Zoom link" placeholder="https://zoom.us/j/..." value={sessionZoomLink} onChange={(e) => setSessionZoomLink(e.target.value)} />
+                      <Button type="submit" disabled={sessionSaving}>{sessionSaving ? 'Adding...' : 'Save session'}</Button>
+                    </div>
+                  </form>
+                )}
+
+                <div className="mt-4 space-y-3">
+                  {moduleSessions.length ? moduleSessions.map((session) => {
+                    const isEditing = editingSessionId === session.id
+                    const displayStatus = getBatchSessionDisplayStatus(session)
+                    return (
+                      <div key={session.id} className="rounded-xl border border-border bg-surface p-3">
+                        {isEditing ? (
+                          <div className="space-y-4">
+                            <div className="grid gap-4 md:grid-cols-2">
+                              <Input label="Session title" value={editSessionTitle} onChange={(e) => setEditSessionTitle(e.target.value)} />
+                              <Input label="Scheduled date and time" type="datetime-local" value={editSessionScheduledAt} onChange={(e) => setEditSessionScheduledAt(e.target.value)} />
+                            </div>
+                            <div className="grid gap-4 md:grid-cols-[1fr_180px]">
+                              <Input label="Zoom link" value={editSessionZoomLink} onChange={(e) => setEditSessionZoomLink(e.target.value)} />
+                              <div>
+                                <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-ink-muted">Computed status</span>
+                                <div className="flex min-h-[42px] items-center rounded-lg border border-border bg-surface-warm px-4 py-3">
+                                  <Badge variant={getBatchSessionBadgeVariant(getBatchSessionDisplayStatus({ ...session, scheduled_at: fromDateTimeInput(editSessionScheduledAt), zoom_link: editSessionZoomLink, recording_url: editSessionRecordingUrl }))}>
+                                    {getBatchSessionDisplayStatus({ ...session, scheduled_at: fromDateTimeInput(editSessionScheduledAt), zoom_link: editSessionZoomLink, recording_url: editSessionRecordingUrl })}
+                                  </Badge>
+                                </div>
+                              </div>
+                            </div>
+                            <Input label="Recording URL — Bunny, YouTube, Vimeo, or direct video" placeholder="https://iframe.mediadelivery.net/..." value={editSessionRecordingUrl} onChange={(e) => setEditSessionRecordingUrl(e.target.value)} />
+                            <div className="flex flex-wrap gap-2">
+                              <Button onClick={() => handleSaveSession(session.id)} disabled={sessionSaving}>{sessionSaving ? 'Saving...' : 'Save session'}</Button>
+                              <Button variant="secondary" onClick={() => setEditingSessionId('')}>Cancel</Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
+                            <div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <h4 className="font-display text-lg font-semibold">{session.title}</h4>
+                                <Badge variant={getBatchSessionBadgeVariant(displayStatus)}>{displayStatus}</Badge>
+                              </div>
+                              <p className="mt-1 text-sm text-ink-muted">{formatDateTime(session.scheduled_at)}</p>
+                              <p className="mt-1 text-xs text-ink-muted">
+                                {getBatchSessionStatusCopy(displayStatus)}
+                                {' · '}
+                                {session.zoom_link ? 'Zoom link set' : 'No Zoom link'}
+                                {' · '}
+                                {session.recording_url ? 'Recording set' : 'No recording yet'}
+                              </p>
+                            </div>
+                            <Button variant="secondary" onClick={() => startEditSession(session)}>Edit</Button>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  }) : (
+                    <div className="rounded-xl border border-dashed border-border bg-surface px-4 py-6 text-center">
+                      <p className="font-display text-lg font-semibold">No sessions in this module yet.</p>
+                      <p className="mt-1 text-sm text-ink-muted">Schedule the first live class for this batch when Drdha is ready.</p>
+                    </div>
+                  )}
+                </div>
+              </article>
+            )
+          }) : (
+            <div className="rounded-2xl border border-dashed border-border bg-surface px-6 py-16 text-center">
+              <Layers className="mx-auto mb-3 text-ink-soft" size={34} />
+              <p className="font-display text-xl font-semibold">No modules yet.</p>
+              <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-ink-muted">Add the shared syllabus chapters first. Each batch can then schedule its own live classes inside those modules.</p>
+              <Button className="mt-5" onClick={() => setShowModuleForm(true)}>Add Module</Button>
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
+        <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
+          <SectionTitle title="Students" subtitle="Place students into this batch after they complete signup or onboarding." />
+          <Badge variant="default">{enrolledStudents.length} enrolled</Badge>
+        </div>
+
+        <form onSubmit={handleEnrollStudent} className="mt-5 rounded-xl border border-border bg-surface-warm p-4">
+          <div className="grid gap-4 lg:grid-cols-[220px_1fr_auto] lg:items-end">
+            <Input label="Search students" placeholder="Name, email, phone" value={studentSearch} onChange={(e) => setStudentSearch(e.target.value)} />
+            <label className="block">
+              <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-ink-muted">Student</span>
+              <select className="w-full rounded-lg border border-border bg-surface px-4 py-3 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15" value={enrollStudentId} onChange={(e) => setEnrollStudentId(e.target.value)}>
+                <option value="">Choose a student</option>
+                {filteredAvailableStudents.map((student) => {
+                  const existingEnrollment = batchEnrollmentRows.find((row) => row.student_id === student.id)
+                  const existingLabel = existingEnrollment
+                    ? existingEnrollment.batch_id === batchId
+                      ? ' — already in this batch'
+                      : ` — currently in ${existingEnrollment.batch?.name ?? 'another batch'}`
+                    : ''
+                  return (
+                    <option key={student.id} value={student.id}>
+                      {student.name ?? student.email ?? 'Unnamed student'}{student.email ? ` (${student.email})` : ''}{existingLabel}
+                    </option>
+                  )
+                })}
+              </select>
+            </label>
+            <Button type="submit" disabled={enrollmentSaving || !availableStudents.length}>{enrollmentSaving ? 'Saving...' : 'Enroll Student'}</Button>
+          </div>
+          {enrollmentError && <p className="mt-3 text-sm text-error">{enrollmentError}</p>}
+          {!availableStudents.length && (
+            <p className="mt-3 text-sm text-ink-muted">No student profiles are available yet. Once students sign up, they can be placed into a batch here.</p>
+          )}
+        </form>
+
+        <div className="mt-5 space-y-3">
+          {enrolledStudents.length ? enrolledStudents.map(({ enrollment, profile }) => (
+            <article key={enrollment.id} className="grid gap-3 rounded-xl border border-border bg-surface-warm p-4 md:grid-cols-[1fr_180px_auto] md:items-center">
+              <div>
+                <h3 className="font-display text-lg font-semibold">{profile.name ?? profile.email?.split('@')[0] ?? 'Student'}</h3>
+                <p className="mt-1 text-sm text-ink-muted">{profile.email ?? 'No email saved'}</p>
+              </div>
+              <p className="text-sm text-ink-muted">{profile.phone ?? 'No phone saved'}</p>
+              <Button variant="secondary" onClick={() => handleRemoveStudent(enrollment.id, profile.name ?? profile.email ?? 'this student')} disabled={enrollmentSaving}>Remove</Button>
+            </article>
+          )) : (
+            <div className="rounded-xl border border-dashed border-border bg-surface-warm px-5 py-8 text-center">
+              <Users className="mx-auto mb-3 text-ink-soft" size={30} />
+              <p className="font-display text-lg font-semibold">No students in this batch yet.</p>
+              <p className="mt-1 text-sm text-ink-muted">Enroll the first student when you are ready to place them into this cohort.</p>
+            </div>
+          )}
+        </div>
+      </section>
+    </div>
   )
 }
 
@@ -4523,6 +6205,346 @@ function VoiceRecorder({ previewUrl, onRecorded, onClear }) {
   )
 }
 
+function AdminStudentsCRM() {
+  const [students, setStudents] = useState([])
+  const [selectedStudentId, setSelectedStudentId] = useState(null)
+  const [loadingStudents, setLoadingStudents] = useState(true)
+  const [studentError, setStudentError] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [admissionFilter, setAdmissionFilter] = useState('all')
+  const [savingStudent, setSavingStudent] = useState(false)
+  const [saveMessage, setSaveMessage] = useState('')
+  const [adminFields, setAdminFields] = useState({
+    admission_status: 'prospect',
+    fee_status: 'pending',
+    currency: 'INR',
+    payment_notes: '',
+  })
+
+  async function loadStudents() {
+    setLoadingStudents(true)
+    setStudentError('')
+
+    const [
+      { data: profileRows, error: profilesError },
+      { data: enrollmentRows, error: enrollmentsError },
+      { data: batchRows },
+      { data: termGroupRows },
+    ] = await Promise.all([
+      supabase.from('profiles').select('*').order('name', { ascending: true }),
+      supabase.from('batch_enrollments').select('*'),
+      supabase.from('batches').select('id, name, term_group_id'),
+      supabase.from('term_groups').select('id, name'),
+    ])
+
+    const loadError = profilesError || enrollmentsError
+    if (loadError) {
+      setStudentError(loadError.message)
+      setStudents([])
+      setLoadingStudents(false)
+      return
+    }
+
+    const batchesById = Object.fromEntries((batchRows ?? []).map((batch) => [batch.id, batch]))
+    const termGroupsById = Object.fromEntries((termGroupRows ?? []).map((termGroup) => [termGroup.id, termGroup]))
+    const batchEnrollmentsByStudent = (enrollmentRows ?? []).reduce((acc, enrollment) => {
+      const batch = batchesById[enrollment.batch_id]
+      const termGroup = batch ? termGroupsById[batch.term_group_id] : null
+      const label = batch ? `${batch.name}${termGroup?.name ? ` — ${termGroup.name}` : ''}` : 'Batch not found'
+      acc[enrollment.student_id] = acc[enrollment.student_id] ?? []
+      acc[enrollment.student_id].push({ ...enrollment, batch, termGroup, label })
+      return acc
+    }, {})
+
+    const nextStudents = (profileRows ?? [])
+      .filter((profile) => profile.role !== 'admin')
+      .map((profile) => ({
+        ...profile,
+        admission_status: profile.admission_status ?? 'prospect',
+        fee_status: profile.fee_status ?? 'pending',
+        currency: profile.currency ?? 'INR',
+        batchEnrollments: batchEnrollmentsByStudent[profile.id] ?? [],
+      }))
+
+    setStudents(nextStudents)
+    setSelectedStudentId((current) => nextStudents.some((student) => student.id === current) ? current : null)
+    setLoadingStudents(false)
+  }
+
+  useEffect(() => { loadStudents() }, [])
+
+  const selectedStudent = students.find((student) => student.id === selectedStudentId)
+
+  useEffect(() => {
+    if (!selectedStudent) return
+    setAdminFields({
+      admission_status: selectedStudent.admission_status ?? 'prospect',
+      fee_status: selectedStudent.fee_status ?? 'pending',
+      currency: selectedStudent.currency ?? 'INR',
+      payment_notes: selectedStudent.payment_notes ?? '',
+    })
+    setSaveMessage('')
+  }, [selectedStudentId])
+
+  const filteredStudents = students.filter((student) => {
+    const query = searchQuery.trim().toLowerCase()
+    const matchesSearch = !query || [student.name, student.email]
+      .filter(Boolean)
+      .some((value) => value.toLowerCase().includes(query))
+    const matchesAdmission = admissionFilter === 'all' || (student.admission_status ?? 'prospect') === admissionFilter
+    return matchesSearch && matchesAdmission
+  })
+
+  function updateAdminField(field, value) {
+    setAdminFields((current) => ({ ...current, [field]: value }))
+  }
+
+  async function handleSaveStudent(event) {
+    event.preventDefault()
+    if (!selectedStudent) return
+
+    setSavingStudent(true)
+    setSaveMessage('')
+    const payload = {
+      admission_status: adminFields.admission_status,
+      fee_status: adminFields.fee_status,
+      currency: adminFields.currency.trim() || null,
+      payment_notes: adminFields.payment_notes.trim() || null,
+    }
+
+    const { error } = await supabase.from('profiles').update(payload).eq('id', selectedStudent.id)
+    if (error) {
+      setSaveMessage(error.message)
+    } else {
+      setSaveMessage('Saved. The CRM record is up to date.')
+      setStudents((current) => current.map((student) => student.id === selectedStudent.id ? { ...student, ...payload } : student))
+    }
+    setSavingStudent(false)
+  }
+
+  function displayValue(value, fallback = 'Not provided yet') {
+    return value ? value : fallback
+  }
+
+  function profileName(student) {
+    return student.name ?? student.email?.split('@')[0] ?? 'Unnamed student'
+  }
+
+  function batchLabel(student) {
+    if (!student.batchEnrollments?.length) return 'Not placed in a batch'
+    return student.batchEnrollments.map((enrollment) => enrollment.label).join(', ')
+  }
+
+  function crmActivityLabel(student) {
+    const notes = student.payment_notes ?? ''
+    const longMatches = [...notes.matchAll(/Long-course interest: ([^\n]+)/g)].map((match) => match[1])
+    const shortMatches = [...notes.matchAll(/Short-course enrollment: ([^\n]+)/g)].map((match) => match[1])
+    if (student.batchEnrollments?.length) return 'Batch placed'
+    if (longMatches.length) return `Interested: ${longMatches[longMatches.length - 1]}`
+    if (shortMatches.length) return `Short course: ${shortMatches[shortMatches.length - 1]}`
+    return 'No course activity yet'
+  }
+
+  function statusLabel(value) {
+    return (value ?? '').replace(/_/g, ' ') || 'Not set'
+  }
+
+  function admissionVariant(value) {
+    if (value === 'enrolled') return 'success'
+    if (value === 'discontinued') return 'accent'
+    return 'default'
+  }
+
+  function feeVariant(value) {
+    return value === 'paid' ? 'success' : 'accent'
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+        <SectionTitle title="Student CRM" subtitle="Profiles, admission status, fee notes, and long-course batch placement." />
+        <Badge variant="default">{students.length} records</Badge>
+      </div>
+
+      {loadingStudents ? (
+        <div className="py-12 text-center text-sm text-ink-muted">Loading students...</div>
+      ) : studentError ? (
+        <div className="rounded-2xl border border-error/20 bg-surface px-5 py-8 text-center">
+          <p className="font-display text-lg font-semibold text-error">Could not load student CRM.</p>
+          <p className="mt-1 text-sm text-ink-muted">{studentError}</p>
+        </div>
+      ) : students.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-border bg-surface py-20 text-center">
+          <Users className="mx-auto mb-3 text-ink-soft" size={32} />
+          <p className="font-display text-lg font-semibold">No student profiles yet.</p>
+          <p className="mx-auto mt-1 max-w-md text-sm text-ink-muted">Once students sign up, their CRM cards will appear here for admission follow-up and batch placement.</p>
+          <Link to="/admin/settings"><Button className="mt-5">Open demo tools</Button></Link>
+        </div>
+      ) : (
+        <>
+          <section className="rounded-2xl border border-border bg-surface p-4 shadow-sm">
+            <div className="grid gap-3 lg:grid-cols-[1fr_220px]">
+              <label className="block">
+                <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-ink-muted">Search</span>
+                <div className="flex items-center gap-2 rounded-lg border border-border bg-surface px-4 py-3 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/15">
+                  <Search size={16} className="text-ink-soft" />
+                  <input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Name or email" className="w-full bg-transparent outline-none" />
+                </div>
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-ink-muted">Admission status</span>
+                <select className="w-full rounded-lg border border-border bg-surface px-4 py-3 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15" value={admissionFilter} onChange={(event) => setAdmissionFilter(event.target.value)}>
+                  <option value="all">All students</option>
+                  <option value="prospect">Prospect</option>
+                  <option value="enrolled">Enrolled</option>
+                  <option value="discontinued">Discontinued</option>
+                </select>
+              </label>
+            </div>
+          </section>
+
+          {filteredStudents.length ? (
+            <div className="overflow-hidden rounded-2xl border border-border bg-surface shadow-sm">
+              <div className="hidden grid-cols-[1.2fr_1.1fr_0.85fr_0.75fr_0.75fr_0.8fr_1.05fr_1.05fr] gap-3 border-b border-border bg-surface-warm px-4 py-3 text-xs font-semibold uppercase tracking-wide text-ink-muted lg:grid">
+                <p>Name</p>
+                <p>Email</p>
+                <p>Phone</p>
+                <p>Location</p>
+                <p>Age group</p>
+                <p>Admission</p>
+                <p>Batch enrolled in</p>
+                <p>CRM activity</p>
+              </div>
+              {filteredStudents.map((student) => (
+                <button key={student.id} type="button" onClick={() => setSelectedStudentId(student.id)} className={`grid w-full gap-3 border-b border-border px-4 py-4 text-left transition last:border-b-0 hover:bg-surface-warm lg:grid-cols-[1.2fr_1.1fr_0.85fr_0.75fr_0.75fr_0.8fr_1.05fr_1.05fr] lg:items-center ${selectedStudentId === student.id ? 'bg-primary-soft/50' : ''}`}>
+                  <div className="min-w-0">
+                    <p className="truncate font-display text-lg font-semibold">{profileName(student)}</p>
+                    <p className="text-xs text-ink-muted lg:hidden">{student.email ?? 'No email saved'}</p>
+                  </div>
+                  <p className="min-w-0 truncate text-sm text-ink-muted">{student.email ?? 'No email saved'}</p>
+                  <p className="text-sm text-ink-muted">{student.phone ?? 'No phone saved'}</p>
+                  <p className="text-sm text-ink-muted">{student.location ?? student.country ?? 'Not set'}</p>
+                  <p className="text-sm text-ink-muted">{student.age_group ?? 'Not set'}</p>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant={admissionVariant(student.admission_status)}>{statusLabel(student.admission_status)}</Badge>
+                    <Badge variant={feeVariant(student.fee_status)}>{statusLabel(student.fee_status)}</Badge>
+                  </div>
+                  <p className="text-sm font-semibold text-ink">{batchLabel(student)}</p>
+                  <p className="text-sm text-ink-muted">{crmActivityLabel(student)}</p>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-border bg-surface px-6 py-14 text-center">
+              <Search className="mx-auto mb-3 text-ink-soft" size={32} />
+              <p className="font-display text-lg font-semibold">No students match this view.</p>
+              <p className="mx-auto mt-1 max-w-md text-sm text-ink-muted">Clear the search or status filter to bring the full student list back into view.</p>
+              <Button className="mt-5" variant="secondary" onClick={() => { setSearchQuery(''); setAdmissionFilter('all') }}>Clear filters</Button>
+            </div>
+          )}
+
+          {selectedStudent && (
+            <div className="fixed inset-0 z-40 bg-ink/25" onClick={() => setSelectedStudentId(null)}>
+              <section className="ml-auto flex h-full w-full max-w-2xl flex-col overflow-y-auto border-l border-border bg-surface p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+                <div className="flex items-start justify-between gap-4 border-b border-border pb-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">Student profile</p>
+                    <h2 className="mt-2 font-display text-2xl font-semibold">{profileName(selectedStudent)}</h2>
+                    <p className="text-sm text-ink-muted">{selectedStudent.email ?? 'No email saved'}</p>
+                  </div>
+                  <IconButton icon={X} label="Close student profile" onClick={() => setSelectedStudentId(null)} />
+                </div>
+
+                <div className="mt-5 space-y-5">
+                  <section className="rounded-xl border border-border bg-surface-warm p-4">
+                    <h3 className="font-display text-xl font-semibold">Student-filled details</h3>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      {[
+                        ['Name', profileName(selectedStudent)],
+                        ['Email', selectedStudent.email],
+                        ['Phone', selectedStudent.phone],
+                        ['Country', selectedStudent.country ?? selectedStudent.location],
+                        ['Age group', selectedStudent.age_group],
+                        ['Portfolio URL', selectedStudent.portfolio_url],
+                      ].map(([label, value]) => (
+                        <div key={label} className="rounded-lg border border-border bg-surface px-4 py-3">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">{label}</p>
+                          <p className="mt-1 break-words text-sm font-semibold text-ink">{displayValue(value)}</p>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-3 grid gap-3">
+                      {[
+                        ['Artist background', selectedStudent.artist_background],
+                        ['Why Shilpa Shastra', selectedStudent.why_shilpa_shastra],
+                      ].map(([label, value]) => (
+                        <div key={label} className="rounded-lg border border-border bg-surface px-4 py-3">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">{label}</p>
+                          <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-ink-muted">{displayValue(value)}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+
+                  <section className="rounded-xl border border-border bg-surface-warm p-4">
+                    <h3 className="font-display text-xl font-semibold">Batch placement</h3>
+                    {selectedStudent.batchEnrollments.length ? (
+                      <div className="mt-3 space-y-2">
+                        {selectedStudent.batchEnrollments.map((enrollment) => (
+                          <div key={enrollment.id} className="rounded-lg border border-border bg-surface px-4 py-3">
+                            <p className="font-semibold">{enrollment.label}</p>
+                            <p className="mt-1 text-sm text-ink-muted">Long-course cohort placement</p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="mt-3 rounded-lg border border-dashed border-border bg-surface px-4 py-6 text-center">
+                        <p className="font-display text-lg font-semibold">Not in a batch yet.</p>
+                        <p className="mt-1 text-sm text-ink-muted">Use the batch detail page to place this student into the right live cohort.</p>
+                        <Link to="/admin/term-groups"><Button className="mt-4" variant="secondary">Open Term Groups</Button></Link>
+                      </div>
+                    )}
+                  </section>
+
+                  <form onSubmit={handleSaveStudent} className="rounded-xl border border-border bg-surface p-4">
+                    <h3 className="font-display text-xl font-semibold">Admin notes</h3>
+                    <div className="mt-4 grid gap-4 sm:grid-cols-3">
+                      <label className="block">
+                        <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-ink-muted">Admission</span>
+                        <select className="w-full rounded-lg border border-border bg-surface px-4 py-3 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15" value={adminFields.admission_status} onChange={(event) => updateAdminField('admission_status', event.target.value)}>
+                          <option value="prospect">Prospect</option>
+                          <option value="enrolled">Enrolled</option>
+                          <option value="discontinued">Discontinued</option>
+                        </select>
+                      </label>
+                      <label className="block">
+                        <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-ink-muted">Fee status</span>
+                        <select className="w-full rounded-lg border border-border bg-surface px-4 py-3 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15" value={adminFields.fee_status} onChange={(event) => updateAdminField('fee_status', event.target.value)}>
+                          <option value="pending">Pending</option>
+                          <option value="paid">Paid</option>
+                        </select>
+                      </label>
+                      <Input label="Currency" value={adminFields.currency} onChange={(event) => updateAdminField('currency', event.target.value)} placeholder="INR" />
+                    </div>
+                    <label className="mt-4 block">
+                      <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-ink-muted">Payment notes</span>
+                      <textarea value={adminFields.payment_notes} onChange={(event) => updateAdminField('payment_notes', event.target.value)} placeholder="Installment plan, receipt note, follow-up reminder..." rows={5} className="w-full rounded-lg border border-border bg-surface px-4 py-3 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15" />
+                    </label>
+                    <div className="mt-4 flex flex-wrap items-center gap-3">
+                      <Button type="submit" disabled={savingStudent}><Save className="mr-2 inline" size={15} />{savingStudent ? 'Saving...' : 'Save CRM fields'}</Button>
+                      {saveMessage && <p className={`text-sm font-semibold ${saveMessage.startsWith('Saved') ? 'text-success' : 'text-error'}`}>{saveMessage}</p>}
+                    </div>
+                  </form>
+                </div>
+              </section>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
 function AdminStudents() {
   const [students, setStudents] = useState([])
   const [selectedStudentId, setSelectedStudentId] = useState(null)
@@ -4907,11 +6929,12 @@ function AdminSettings() {
         <h2 className="mt-3 font-display text-3xl font-semibold">What Drdha can try today</h2>
         <p className="mt-3 max-w-3xl text-sm leading-7 text-ink-muted">The working tabs are grouped at the top of the sidebar. Future modules are separated under Coming soon so there is no confusion about what is live.</p>
       </section>
-      <section className="grid gap-5 lg:grid-cols-3">
+      <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
         {[
-          ['1', 'Courses', 'Create a course, add sessions with video URLs, references, and resources, then publish it to the student catalog.', '/admin/courses'],
-          ['2', 'Assignments', 'Open submitted student work, draw annotations directly on the drawing, record a voice note, write feedback, and save the review.', '/admin/assignments'],
-          ['3', 'Students', 'See enrolled students and the progress they have made from the student side.', '/admin/students'],
+          ['1', 'Courses', 'Create short courses or long-course shells, then publish them to the student catalog.', '/admin/courses'],
+          ['2', 'Term Groups', 'Open an intake, create batches, schedule live classes, and attach recordings.', '/admin/term-groups'],
+          ['3', 'Assignments', 'Open submitted work, annotate drawings, record a voice note, and save the review.', '/admin/assignments'],
+          ['4', 'Students', 'Review CRM profiles, course interest, payment notes, and batch placement.', '/admin/students'],
         ].map(([step, title, copy, href]) => (
           <article key={title} className="rounded-2xl border border-border bg-surface p-5">
             <div className="grid h-10 w-10 place-items-center rounded-full bg-primary-soft font-display text-lg font-semibold text-primary">{step}</div>

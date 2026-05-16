@@ -92,9 +92,13 @@ This is the headline feature driving the foundation rebuild.
 - After each live class, the **recording is stored in the LMS** so that batch's students can re-watch.
 - Students belong to a batch. They see their batch's sessions and recordings.
 
+**Correction locked May 16:** modules are shared syllabus chapters for a term group, not per-batch curriculum copies. Each batch has its own live sessions mapped to those shared modules. The session count and pacing can differ by batch because each group learns at a different pace.
+
 **This is fundamentally different from the recorded courses already built.** Recorded courses = fixed content, self-paced. Long courses = live, cohort-based, batch-managed, recordings accumulate over time.
 
-**Implication:** the data model needs a proper Batch entity, and the course model must support two course types (recorded / long). This is the core of the foundation work.
+**Correct hierarchy:** Course -> Term Group -> shared Term Modules (syllabus chapters), plus Term Group -> Batches -> Batch Sessions -> Recordings. A batch session belongs to one batch and maps to one shared module.
+
+**Implication:** the data model needs proper Term Group, Batch, shared Module, and Batch Session entities, and the course model must support two course types (recorded / long). This is the core of the foundation work.
 
 ---
 
