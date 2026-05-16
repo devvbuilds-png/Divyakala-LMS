@@ -1001,7 +1001,10 @@ function Auth() {
       const { error: signUpError } = await supabase.auth.signUp({
         email,
         password: Math.random().toString(36),
-        options: { data: name ? { name } : undefined },
+        options: {
+          data: name ? { name } : undefined,
+          emailRedirectTo: `${window.location.origin}/learning`,
+        },
       })
       // "already registered" is fine — fall through to OTP sign-in
       if (signUpError && !signUpError.message.toLowerCase().includes('already registered')) {
@@ -1011,7 +1014,12 @@ function Auth() {
       }
     }
 
-    const { error } = await supabase.auth.signInWithOtp({ email })
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: `${window.location.origin}/learning`,
+      },
+    })
     if (error) setError(error.message)
     else setOtpSent(true)
     setLoading(false)
