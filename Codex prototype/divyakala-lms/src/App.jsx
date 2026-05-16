@@ -982,6 +982,8 @@ function Auth() {
   const [lastName, setLastName] = useState('')
   const [country, setCountry] = useState('India')
   const [phone, setPhone] = useState('')
+  const [password, setPassword] = useState('')
+  const [usePasswordLogin, setUsePasswordLogin] = useState(false)
   const [otpSent, setOtpSent] = useState(false)
   const [otp, setOtp] = useState('')
   const [loading, setLoading] = useState(false)
@@ -995,6 +997,13 @@ function Auth() {
     e.preventDefault()
     setLoading(true)
     setError('')
+
+    if (!isSignUp && usePasswordLogin) {
+      const { error: passwordError } = await supabase.auth.signInWithPassword({ email, password })
+      if (passwordError) setError(passwordError.message)
+      setLoading(false)
+      return
+    }
 
     if (isSignUp) {
       const name = `${firstName} ${lastName}`.trim()
@@ -1082,8 +1091,16 @@ function Auth() {
                 </div>
               )}
               <Input label="Email" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
+              {!isSignUp && usePasswordLogin && (
+                <Input label="Password" type="password" placeholder="Demo account password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+              )}
               {error && <p className="text-sm text-error">{error}</p>}
-              <Button className="w-full" disabled={loading}>{loading ? 'Sending…' : isSignUp ? 'Create Account' : 'Continue'}</Button>
+              <Button className="w-full" disabled={loading}>{loading ? (usePasswordLogin ? 'Signing in...' : 'Sending...') : isSignUp ? 'Create Account' : usePasswordLogin ? 'Sign in with password' : 'Continue'}</Button>
+              {!isSignUp && (
+                <button type="button" className="w-full text-center text-sm font-semibold text-primary" onClick={() => { setUsePasswordLogin((current) => !current); setError('') }}>
+                  {usePasswordLogin ? 'Use email code instead' : 'Use password for demo login'}
+                </button>
+              )}
             </form>
           ) : (
             <form onSubmit={handleVerifyOtp} className="mt-8 space-y-5 rounded-2xl border border-border bg-surface p-8 text-left shadow-md">
