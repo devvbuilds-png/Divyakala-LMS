@@ -192,18 +192,9 @@ const longCourseBlueprint = {
   ],
 }
 
-function getDefaultLongCourseModules() {
-  return longCourseBlueprint.modules.map((module) => ({
-    title: module.title,
-    description: module.description,
-    planned_sessions: module.sessions.length,
-    sessions: module.sessions.map((title) => ({ title })),
-  }))
-}
-
 function normalizeLongCourseModules(value) {
   const rawModules = Array.isArray(value?.modules) ? value.modules : Array.isArray(value) ? value : null
-  if (!rawModules?.length) return getDefaultLongCourseModules()
+  if (!rawModules?.length) return []
 
   return rawModules.map((module, index) => {
     const sessions = Array.isArray(module.sessions) ? module.sessions : []
@@ -352,7 +343,24 @@ async function saveExtendedCourseFields(courseId, fields) {
     Object.entries(fields).filter(([, value]) => value !== undefined)
   )
   if (!Object.keys(payload).length) return { error: null }
-  return supabase.from('courses').update(payload).eq('id', courseId)
+
+  const skippedColumns = []
+  let nextPayload = { ...payload }
+
+  while (Object.keys(nextPayload).length) {
+    const result = await supabase.from('courses').update(nextPayload).eq('id', courseId)
+    if (!result.error) return { ...result, skippedColumns }
+    if (!isMissingSupabaseColumn(result.error)) return { ...result, skippedColumns }
+
+    const missingColumn = result.error.message?.match(/'([^']+)' column/)?.[1]
+    if (!missingColumn || !(missingColumn in nextPayload)) return { ...result, skippedColumns }
+
+    skippedColumns.push(missingColumn)
+    const { [missingColumn]: _missing, ...remainingPayload } = nextPayload
+    nextPayload = remainingPayload
+  }
+
+  return { error: null, skippedColumns }
 }
 
 function isMissingSupabaseColumn(error) {
@@ -1864,9 +1872,10 @@ function CourseDetail() {
     loadCourseDetail()
   }, [courseId, session?.user?.id])
 
-  const isLongCourse = course?.course_type === 'long' || fallbackCourse.course_type === 'long'
+  const isDemoLongCourse = !course && fallbackCourse.id === longCourseBlueprint.id
+  const isLongCourse = course?.course_type === 'long' || isDemoLongCourse
   const displayCourse = isLongCourse
-    ? { ...longCourseBlueprint, ...(course ?? fallbackCourse), modules: longCourseBlueprint.modules }
+    ? (course ?? longCourseBlueprint)
     : course ?? fallbackCourse
   const previewSession = courseSessions.find((session) => session.is_preview) ?? courseSessions[0] ?? null
   const sessionCount = courseSessions.length || displayCourse.session_count || displayCourse.sessions || 0
@@ -1876,11 +1885,17 @@ function CourseDetail() {
 
   const instructorName = displayCourse.instructor ?? 'Drdha Vrata Gorrick'
   const instructorInitials = instructorName.split(' ').filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'DV'
-  const faqItems = [
-    ['Who is this course for?', displayCourse.who_is_this_for ?? 'Students of all levels who want a devotional, structured approach to sacred drawing.'],
-    ['What materials do you need?', displayCourse.materials_needed ?? 'Pencil, eraser, ruler, drawing paper, and the patience to build the form slowly.'],
-    ['How long do I have access?', displayCourse.access_details ?? 'Access details can be updated from the admin editor.'],
-  ]
+  const faqItems = isLongCourse
+    ? [
+      ['Who is this course for?', displayCourse.who_is_this_for],
+      ['What materials do you need?', displayCourse.materials_needed],
+      ['How long do I have access?', displayCourse.access_details],
+    ].filter(([, copy]) => copy)
+    : [
+      ['Who is this course for?', displayCourse.who_is_this_for ?? 'Students of all levels who want a devotional, structured approach to sacred drawing.'],
+      ['What materials do you need?', displayCourse.materials_needed ?? 'Pencil, eraser, ruler, drawing paper, and the patience to build the form slowly.'],
+      ['How long do I have access?', displayCourse.access_details ?? 'Access details can be updated from the admin editor.'],
+    ]
 
   async function handleEnroll() {
     setEnrollError('')
@@ -2139,53 +2154,48 @@ function LongCourseDetail({
   const [openModule, setOpenModule] = useState(0)
   const modules = displayCourse.long_course_structure
     ? toCourseStructureModules(displayCourse.long_course_structure)
-    : displayCourse.modules ?? longCourseBlueprint.modules
-  const totalSessions = modules.reduce((sum, module) => sum + module.sessions.length, 0)
+    : displayCourse.modules ?? []
+  const totalSessions = modules.reduce((sum, module) => sum + (Number(module.planned_sessions) || module.sessions.length), 0)
   const pill = 'rounded-full bg-[#ede0ba] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#9a7a3a]'
   const eyebrow = 'text-[10px] font-semibold uppercase tracking-[0.26em] text-[#9a7a3a]'
   const sectionHeading = 'mt-1.5 font-display text-[1.35rem] font-semibold leading-snug text-[#1a1208]'
   const divider = 'border-t border-[#e8d8a8]'
-  const longFaqItems = faqItems.map(([title, copy]) => {
-    if (title === 'How long do I have access?') {
-      return [title, displayCourse.access_details ?? copy]
-    }
-    return [title, copy]
-  })
-  const howLearningCards = (displayCourse.how_learning_works ?? longCourseBlueprint.how_learning_works)
+  const longFaqItems = faqItems.filter(([, copy]) => copy)
+  const howLearningCards = (displayCourse.how_learning_works ?? '')
     .split(/\n+/)
     .map((item) => item.trim())
     .filter(Boolean)
-  const timelineCommitment = displayCourse.timeline_commitment ?? longCourseBlueprint.timeline_commitment
-  const moduleCount = displayCourse.module_count || modules.length
-  const durationLabel = displayCourse.duration_label ?? longCourseBlueprint.duration_label
-  const levelLabel = displayCourse.level ?? longCourseBlueprint.level
+  const timelineCommitment = displayCourse.timeline_commitment ?? ''
+  const moduleCount = displayCourse.module_count || modules.length || 0
+  const durationLabel = displayCourse.duration_label ?? ''
+  const levelLabel = displayCourse.level ?? ''
   const plannedSessionCount = sessionCount || displayCourse.session_count || totalSessions
   const liveFormatLabel = 'Live sessions + recordings'
   const enrollmentLabel = 'By request'
 
   const courseFacts = [
-    { label: 'Duration', value: durationLabel },
-    { label: 'Modules', value: `${moduleCount} modules` },
-    { label: 'Sessions', value: plannedSessionCount ? `${plannedSessionCount} planned live sessions` : 'Live sessions' },
-    { label: 'Level', value: levelLabel },
+    durationLabel ? { label: 'Duration', value: durationLabel } : null,
+    moduleCount ? { label: 'Modules', value: `${moduleCount} modules` } : null,
+    plannedSessionCount ? { label: 'Sessions', value: `${plannedSessionCount} planned live sessions` } : null,
+    levelLabel ? { label: 'Level', value: levelLabel } : null,
     { label: 'Format', value: liveFormatLabel },
     { label: 'Enrollment', value: enrollmentLabel },
-  ]
+  ].filter(Boolean)
 
   return (
     <div>
       <section className="-mx-4 -mt-5 bg-[#ede3c6] px-4 py-8 sm:-mx-5 sm:px-5 lg:-mx-5 lg:px-5 lg:py-10">
         <div className="grid gap-7 lg:grid-cols-[1fr_0.85fr] lg:items-center">
           <div>
-            <p className={eyebrow}>Long course - {durationLabel} live program</p>
+            <p className={eyebrow}>{durationLabel ? `Long course - ${durationLabel} live program` : 'Long course'}</p>
             <h1 className="mt-3 max-w-2xl font-display text-[1.9rem] font-semibold leading-[1.2] text-[#1a1208] sm:text-[2.25rem]">
               {displayCourse.title}
             </h1>
             <p className="mt-2.5 text-[15px] text-[#7a6040]">By {instructorName}</p>
             <div className="mt-4 flex flex-wrap gap-2">
-              <span className={pill}>{durationLabel}</span>
-              <span className={pill}>{moduleCount} modules</span>
-              {plannedSessionCount ? <span className={pill}>{plannedSessionCount} planned live sessions</span> : <span className={pill}>Live sessions</span>}
+              {durationLabel && <span className={pill}>{durationLabel}</span>}
+              {moduleCount ? <span className={pill}>{moduleCount} modules</span> : null}
+              {plannedSessionCount ? <span className={pill}>{plannedSessionCount} planned live sessions</span> : null}
               {levelLabel && <span className={pill}>{levelLabel}</span>}
               <span className={pill}>Recordings after class</span>
             </div>
@@ -2209,9 +2219,13 @@ function LongCourseDetail({
           <section className="pb-8">
             <p className={eyebrow}>Overview</p>
             <h2 className={sectionHeading}>About this course</h2>
-            <p className="mt-4 text-[14px] leading-[1.9] text-[#7a6040]">{displayCourse.description ?? longCourseBlueprint.description}</p>
+            {displayCourse.description ? (
+              <p className="mt-4 text-[14px] leading-[1.9] text-[#7a6040]">{displayCourse.description}</p>
+            ) : (
+              <p className="mt-4 rounded-xl border border-dashed border-[#ddc990] bg-[#faf3e4] px-4 py-4 text-[13px] text-[#9a7a3a]">About this course has not been added yet.</p>
+            )}
             <div className="mt-5 flex flex-wrap gap-2">
-              <span className="rounded-full border border-[#ddc990] bg-[#f5ead8] px-3 py-1 text-[12px] font-semibold text-[#7a6040]">{moduleCount}-module guided path</span>
+              {moduleCount ? <span className="rounded-full border border-[#ddc990] bg-[#f5ead8] px-3 py-1 text-[12px] font-semibold text-[#7a6040]">{moduleCount}-module guided path</span> : null}
               {plannedSessionCount ? <span className="rounded-full border border-[#ddc990] bg-[#f5ead8] px-3 py-1 text-[12px] font-semibold text-[#7a6040]">{plannedSessionCount} planned live sessions</span> : null}
               <span className="rounded-full border border-[#ddc990] bg-[#f5ead8] px-3 py-1 text-[12px] font-semibold text-[#7a6040]">Live teaching with Drdha</span>
               <span className="rounded-full border border-[#b8d4a8] bg-[#eef5eb] px-3 py-1 text-[12px] font-semibold text-[#5c8a4f]">Concluded sessions become recordings</span>
@@ -2226,13 +2240,13 @@ function LongCourseDetail({
                 <p className={eyebrow}>Structure</p>
                 <h2 className={sectionHeading}>Course structure</h2>
               </div>
-              <span className="shrink-0 text-[12px] text-[#9a7a3a]">{moduleCount} modules</span>
+              {moduleCount ? <span className="shrink-0 text-[12px] text-[#9a7a3a]">{moduleCount} modules</span> : null}
             </div>
-            <p className="mt-4 text-[13px] leading-[1.8] text-[#7a6040]">
-              {displayCourse.course_structure_summary ?? longCourseBlueprint.course_structure_summary}
-            </p>
+            {displayCourse.course_structure_summary && (
+              <p className="mt-4 text-[13px] leading-[1.8] text-[#7a6040]">{displayCourse.course_structure_summary}</p>
+            )}
             <div className="mt-5 space-y-3">
-              {modules.map((module, index) => {
+              {modules.length ? modules.map((module, index) => {
                 const expanded = openModule === index
                 return (
                   <article key={module.title} className="overflow-hidden rounded-xl border border-[#ddc990] bg-[#faf3e4]">
@@ -2271,40 +2285,49 @@ function LongCourseDetail({
                     )}
                   </article>
                 )
-              })}
-            </div>
-          </section>
-
-          <div className={divider} />
-
-          <section className="py-8">
-            <p className={eyebrow}>Method</p>
-            <h2 className={sectionHeading}>How learning works</h2>
-            <div className="mt-5 space-y-3">
-              {howLearningCards.map((copy, index) => (
-                <div key={`${index}-${copy}`} className="rounded-xl border border-[#ddc990] bg-[#faf3e4] p-4">
-                  <p className="text-[13px] leading-[1.8] text-[#7a6040]">{copy}</p>
+              }) : (
+                <div className="rounded-xl border border-dashed border-[#ddc990] bg-[#faf3e4] px-5 py-8 text-center">
+                  <p className="text-[13px] font-semibold text-[#1a1208]">No modules added yet.</p>
+                  <p className="mt-1 text-[12px] text-[#9a7a3a]">The course structure will appear here after modules are added from admin.</p>
                 </div>
-              ))}
+              )}
             </div>
           </section>
 
-          <div className={divider} />
+          {howLearningCards.length > 0 && (
+            <>
+              <div className={divider} />
+              <section className="py-8">
+                <p className={eyebrow}>Method</p>
+                <h2 className={sectionHeading}>How learning works</h2>
+                <div className="mt-5 space-y-3">
+                  {howLearningCards.map((copy, index) => (
+                    <div key={`${index}-${copy}`} className="rounded-xl border border-[#ddc990] bg-[#faf3e4] p-4">
+                      <p className="text-[13px] leading-[1.8] text-[#7a6040]">{copy}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            </>
+          )}
 
-          <section className="py-8">
-            <p className={eyebrow}>Commitment</p>
-            <h2 className={sectionHeading}>Timeline and commitment</h2>
-            <div className="mt-5 rounded-xl border border-[#ddc990] bg-[#faf3e4] p-5">
-              <p className="text-[14px] leading-[1.9] text-[#7a6040]">
-                {timelineCommitment}
-              </p>
-              <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                <div><p className={eyebrow}>Length</p><p className="mt-1 font-semibold text-[#1a1208]">{durationLabel}</p></div>
-                <div><p className={eyebrow}>Path</p><p className="mt-1 font-semibold text-[#1a1208]">{moduleCount} sequential modules</p></div>
-                <div><p className={eyebrow}>Access</p><p className="mt-1 font-semibold text-[#1a1208]">{liveFormatLabel}</p></div>
-              </div>
-            </div>
-          </section>
+          {(timelineCommitment || durationLabel || moduleCount) && (
+            <>
+              <div className={divider} />
+              <section className="py-8">
+                <p className={eyebrow}>Commitment</p>
+                <h2 className={sectionHeading}>Timeline and commitment</h2>
+                <div className="mt-5 rounded-xl border border-[#ddc990] bg-[#faf3e4] p-5">
+                  {timelineCommitment && <p className="text-[14px] leading-[1.9] text-[#7a6040]">{timelineCommitment}</p>}
+                  <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                    {durationLabel && <div><p className={eyebrow}>Length</p><p className="mt-1 font-semibold text-[#1a1208]">{durationLabel}</p></div>}
+                    {moduleCount ? <div><p className={eyebrow}>Path</p><p className="mt-1 font-semibold text-[#1a1208]">{moduleCount} sequential modules</p></div> : null}
+                    <div><p className={eyebrow}>Access</p><p className="mt-1 font-semibold text-[#1a1208]">{liveFormatLabel}</p></div>
+                  </div>
+                </div>
+              </section>
+            </>
+          )}
 
           <div className={divider} />
 
@@ -2328,26 +2351,29 @@ function LongCourseDetail({
             </a>
           </section>
 
-          <div className={divider} />
-
-          <section className="py-8">
-            <p className={eyebrow}>Before you begin</p>
-            <h2 className={sectionHeading}>Frequently asked questions</h2>
-            <div className="mt-5">
-              {longFaqItems.map(([title, copy]) => (
-                <div key={title} className="border-b border-[#e8d8a8] last:border-b-0">
-                  <button
-                    className="faq-row flex w-full items-center justify-between gap-4 py-4 text-left text-[13px] font-semibold text-[#1a1208]"
-                    onClick={() => setOpen(open === title ? '' : title)}
-                  >
-                    <span className="faq-label transition-colors duration-150">{title}</span>
-                    <ChevronRight size={15} className={`faq-icon shrink-0 text-[#c5b090] transition-all duration-150 ${open === title ? 'rotate-90' : ''}`} />
-                  </button>
-                  {open === title && <p className="pb-5 text-[13px] leading-[1.8] text-[#7a6040]">{copy}</p>}
+          {longFaqItems.length > 0 && (
+            <>
+              <div className={divider} />
+              <section className="py-8">
+                <p className={eyebrow}>Before you begin</p>
+                <h2 className={sectionHeading}>Frequently asked questions</h2>
+                <div className="mt-5">
+                  {longFaqItems.map(([title, copy]) => (
+                    <div key={title} className="border-b border-[#e8d8a8] last:border-b-0">
+                      <button
+                        className="faq-row flex w-full items-center justify-between gap-4 py-4 text-left text-[13px] font-semibold text-[#1a1208]"
+                        onClick={() => setOpen(open === title ? '' : title)}
+                      >
+                        <span className="faq-label transition-colors duration-150">{title}</span>
+                        <ChevronRight size={15} className={`faq-icon shrink-0 text-[#c5b090] transition-all duration-150 ${open === title ? 'rotate-90' : ''}`} />
+                      </button>
+                      {open === title && <p className="pb-5 text-[13px] leading-[1.8] text-[#7a6040]">{copy}</p>}
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </section>
+              </section>
+            </>
+          )}
         </div>
 
         <div className="hidden lg:block lg:sticky lg:top-4">
@@ -4422,7 +4448,7 @@ function AdminCourseEditor() {
   const [courseStructureSummary, setCourseStructureSummary] = useState('')
   const [howLearningWorks, setHowLearningWorks] = useState('')
   const [timelineCommitment, setTimelineCommitment] = useState('')
-  const [longCourseModules, setLongCourseModules] = useState(() => getDefaultLongCourseModules())
+  const [longCourseModules, setLongCourseModules] = useState([])
 
   useEffect(() => {
     async function loadCourseEditor() {
@@ -4431,18 +4457,7 @@ function AdminCourseEditor() {
         setCourse(null)
         setSessions([])
         if (courseType === 'long') {
-          setDurationLabel((current) => current || '2 years')
-          setModuleCountLabel((current) => current || String(longCourseBlueprint.module_count))
-          setSessionCountLabel((current) => current || String(longCourseBlueprint.session_count))
-          setLevel((current) => current || longCourseBlueprint.level)
-          setDescription((current) => current || longCourseBlueprint.description)
-          setCourseStructureSummary((current) => current || longCourseBlueprint.course_structure_summary)
-          setHowLearningWorks((current) => current || longCourseBlueprint.how_learning_works)
-          setTimelineCommitment((current) => current || longCourseBlueprint.timeline_commitment)
-          setWhoIsThisFor((current) => current || longCourseBlueprint.who_is_this_for)
-          setMaterialsNeeded((current) => current || longCourseBlueprint.materials_needed)
-          setAccessDetails((current) => current || longCourseBlueprint.access_details)
-          setLongCourseModules((current) => current.length ? current : getDefaultLongCourseModules())
+          setLongCourseModules((current) => current.length ? current : [])
         }
         setLoading(false)
         return
@@ -4542,7 +4557,7 @@ function AdminCourseEditor() {
         timeline_commitment: timelineCommitment.trim() || null,
         long_course_structure: courseType === 'long' ? { modules: cleanedModules } : null,
       }
-      const { error: extendedError } = await saveExtendedCourseFields(data.id, extendedFields)
+      const { error: extendedError, skippedColumns = [] } = await saveExtendedCourseFields(data.id, extendedFields)
 
       setCourse({
         ...data,
@@ -4550,7 +4565,9 @@ function AdminCourseEditor() {
       })
       setThumbnailFile(null)
       if (extendedError) {
-        setFormError('Course saved, but trailer/questions/session count need new Supabase columns before they can persist.')
+        setFormError('Course saved, but some detail fields could not persist. Run the Supabase long-course SQL fields file, then save again.')
+      } else if (skippedColumns.length) {
+        setFormError(`Course saved, but these fields need Supabase columns before they can persist: ${skippedColumns.join(', ')}. Run the long-course SQL file, then save again.`)
       }
       if (isCreateMode) {
         navigate(`/admin/courses/${data.id}`)
