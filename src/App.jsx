@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
-import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
+import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { supabase } from './lib/supabase'
 import { Tldraw } from '@tldraw/tldraw'
 import {
@@ -1215,15 +1215,14 @@ function Button({ children, variant = 'primary', className = '', ...props }) {
 function MyLearning() {
   const { session } = useAuth()
   const [learningItems, setLearningItems] = useState([])
-  const [featuredItem, setFeaturedItem] = useState(null)
   const [loadingLearning, setLoadingLearning] = useState(true)
   const [learningError, setLearningError] = useState('')
+  const [courseTypeTab, setCourseTypeTab] = useState('Short courses')
 
   useEffect(() => {
     async function loadLearning() {
       if (!session?.user?.id) {
         setLearningItems([])
-        setFeaturedItem(null)
         setLoadingLearning(false)
         return
       }
@@ -1240,7 +1239,6 @@ function MyLearning() {
       if (error) {
         setLearningError(error.message)
         setLearningItems([])
-        setFeaturedItem(null)
         setLoadingLearning(false)
         return
       }
@@ -1250,7 +1248,6 @@ function MyLearning() {
 
       if (!courseIds.length) {
         setLearningItems([])
-        setFeaturedItem(null)
         setLoadingLearning(false)
         return
       }
@@ -1291,7 +1288,6 @@ function MyLearning() {
         .filter(Boolean)
 
       setLearningItems(nextItems)
-      setFeaturedItem(nextItems[0] ?? null)
       setLoadingLearning(false)
     }
 
@@ -1311,48 +1307,115 @@ function MyLearning() {
     )
   }
 
+  const filteredItems = learningItems.filter((item) => {
+    const isLong = item.course.course_type === 'long'
+    return courseTypeTab === 'Long courses' ? isLong : !isLong
+  })
+  const featuredItem = filteredItems[0] ?? null
+
   if (!learningItems.length) {
     return (
-      <div className="grid gap-5 rounded-2xl border border-dashed border-border bg-surface p-10 text-center">
-        <BookOpen className="mx-auto text-ink-soft" size={36} />
-        <div>
-          <h2 className="font-display text-2xl font-semibold">No enrolled courses yet.</h2>
-          <p className="mt-1 text-sm text-ink-muted">Browse published courses and enroll to begin tracking your practice here.</p>
+      <div className="space-y-5">
+        <CoursePillTabs active={courseTypeTab} onChange={setCourseTypeTab} />
+        <div className="grid gap-5 rounded-2xl border border-dashed border-border bg-surface p-10 text-center">
+          <BookOpen className="mx-auto text-ink-soft" size={36} />
+          <div>
+            <h2 className="font-display text-2xl font-semibold">No enrolled courses yet.</h2>
+            <p className="mt-1 text-sm text-ink-muted">Browse published courses and enroll to begin tracking your practice here.</p>
+          </div>
+          <Link to="/browse"><Button>Browse Courses</Button></Link>
         </div>
-        <Link to="/browse"><Button>Browse Courses</Button></Link>
+        <JournalPreview />
+        <WorkshopBanner />
       </div>
     )
   }
 
   return (
     <div className="space-y-7">
-      <section className="grid gap-6 rounded-2xl border border-border bg-surface p-5 shadow-sm lg:grid-cols-[0.42fr_0.58fr] lg:p-6">
-        {featuredItem.course.thumbnail_url
-          ? <img src={featuredItem.course.thumbnail_url} alt={featuredItem.course.title} className="min-h-[220px] rounded-2xl object-cover" />
-          : <ArtPanel label={featuredItem.course.art ?? art.srinivasa} className="min-h-[220px]" />
-        }
-        <div className="flex flex-col justify-center">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-[0.25em] text-primary">Continue your practice</p>
-          <h2 className="font-display text-3xl font-medium">{featuredItem.course.title}</h2>
-          <p className="mt-1 text-sm text-ink-muted">By {featuredItem.course.instructor ?? 'Drdha Vrata Gorrick'}</p>
-          <Progress value={featuredItem.progress} className="mt-6" />
-          <p className="mt-3 text-sm text-ink-muted">{featuredItem.progress}% complete - {featuredItem.label}</p>
-          <p className="mt-3">You left off at: <span className="font-semibold">{featuredItem.lastSessionTitle}</span></p>
-          <div className="mt-6 flex flex-wrap gap-3">
-            <Link to={`/courses/${featuredItem.course.id}/lesson/${featuredItem.lastSessionId}`}><Button>Resume</Button></Link>
-            <Link to={`/courses/${featuredItem.course.id}`}><Button variant="ghost">View course</Button></Link>
+      <CoursePillTabs active={courseTypeTab} onChange={setCourseTypeTab} />
+
+      {courseTypeTab === 'Short courses' ? (
+        filteredItems.length === 0 ? (
+          <div className="grid gap-5 rounded-2xl border border-dashed border-border bg-surface p-10 text-center">
+            <BookOpen className="mx-auto text-ink-soft" size={36} />
+            <div>
+              <h2 className="font-display text-2xl font-semibold">No short course enrollments yet.</h2>
+              <p className="mt-1 text-sm text-ink-muted">Browse short courses and enroll to see your progress here.</p>
+            </div>
+            <Link to="/browse"><Button>Browse Courses</Button></Link>
           </div>
-        </div>
-      </section>
-      <SectionTitle title="Your Courses" />
-      <div className="grid gap-5 md:grid-cols-2">{learningItems.map((item) => (
-        <CourseCard
-          key={item.enrollment.id}
-          course={item.course}
-          progress={item.progress}
-          lastSessionId={item.lastSessionId}
-        />
-      ))}</div>
+        ) : (
+          <>
+            <section className="grid gap-6 rounded-2xl border border-border bg-surface p-5 shadow-sm lg:grid-cols-[0.42fr_0.58fr] lg:p-6">
+              {featuredItem.course.thumbnail_url
+                ? <img src={featuredItem.course.thumbnail_url} alt={featuredItem.course.title} className="min-h-[220px] rounded-2xl object-cover" />
+                : <ArtPanel label={featuredItem.course.art ?? art.srinivasa} className="min-h-[220px]" />
+              }
+              <div className="flex flex-col justify-center">
+                <p className="mb-3 text-xs font-semibold uppercase tracking-[0.25em] text-primary">Continue your practice</p>
+                <h2 className="font-display text-3xl font-medium">{featuredItem.course.title}</h2>
+                <p className="mt-1 text-sm text-ink-muted">By {featuredItem.course.instructor ?? 'Drdha Vrata Gorrick'}</p>
+                <Progress value={featuredItem.progress} className="mt-6" />
+                <p className="mt-3 text-sm text-ink-muted">{featuredItem.progress}% complete - {featuredItem.label}</p>
+                <p className="mt-3">You left off at: <span className="font-semibold">{featuredItem.lastSessionTitle}</span></p>
+                <div className="mt-6 flex flex-wrap gap-3">
+                  <Link to={`/courses/${featuredItem.course.id}/lesson/${featuredItem.lastSessionId}`}><Button>Resume</Button></Link>
+                  <Link to={`/courses/${featuredItem.course.id}`}><Button variant="ghost">View course</Button></Link>
+                </div>
+              </div>
+            </section>
+            <SectionTitle title="Your Courses" />
+            <div className="grid gap-5 md:grid-cols-2">{filteredItems.map((item) => (
+              <CourseCard key={item.enrollment.id} course={item.course} progress={item.progress} lastSessionId={item.lastSessionId} />
+            ))}</div>
+          </>
+        )
+      ) : (
+        <>
+          <section className="grid gap-6 rounded-2xl border border-border bg-surface p-5 shadow-sm lg:grid-cols-[0.42fr_0.58fr] lg:p-6">
+            {filteredItems.length > 0 ? (
+              <>
+                {featuredItem.course.thumbnail_url
+                  ? <img src={featuredItem.course.thumbnail_url} alt={featuredItem.course.title} className="min-h-[220px] rounded-2xl object-cover" />
+                  : <ArtPanel label={featuredItem.course.art ?? art.srinivasa} className="min-h-[220px]" />
+                }
+                <div className="flex flex-col justify-center">
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-[0.25em] text-primary">Continue your practice</p>
+                  <h2 className="font-display text-3xl font-medium">{featuredItem.course.title}</h2>
+                  <p className="mt-1 text-sm text-ink-muted">By {featuredItem.course.instructor ?? 'Drdha Vrata Gorrick'}</p>
+                  <Progress value={featuredItem.progress} className="mt-6" />
+                  <p className="mt-3 text-sm text-ink-muted">{featuredItem.progress}% complete - {featuredItem.label}</p>
+                  <p className="mt-3">You left off at: <span className="font-semibold">{featuredItem.lastSessionTitle}</span></p>
+                  <div className="mt-6 flex flex-wrap gap-3">
+                    <Link to={`/courses/${featuredItem.course.id}/lesson/${featuredItem.lastSessionId}`}><Button>Resume</Button></Link>
+                    <Link to={`/courses/${featuredItem.course.id}`}><Button variant="ghost">View course</Button></Link>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="col-span-2 flex flex-col items-center justify-center gap-3 py-8 text-center">
+                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-primary">Continue your practice</p>
+                <p className="font-display text-xl font-semibold">No long courses yet.</p>
+                <p className="text-sm text-ink-muted">Once you're placed into a long course batch, it will appear here.</p>
+              </div>
+            )}
+          </section>
+          <SectionTitle title="Your Courses" />
+          {filteredItems.length > 0 ? (
+            <div className="grid gap-5 md:grid-cols-2">{filteredItems.map((item) => (
+              <CourseCard key={item.enrollment.id} course={item.course} progress={item.progress} lastSessionId={item.lastSessionId} />
+            ))}</div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-border bg-surface p-8 text-center">
+              <BookOpen className="mx-auto mb-3 text-ink-soft" size={28} />
+              <p className="font-display text-lg font-semibold">No long courses yet.</p>
+              <p className="mt-1 text-sm text-ink-muted">Long course batches are placed by Drdha. Check back after your admission is confirmed.</p>
+            </div>
+          )}
+        </>
+      )}
+
       <JournalPreview />
       <WorkshopBanner />
     </div>
@@ -1378,6 +1441,27 @@ function WorkshopBanner() {
 
 function SectionTitle({ title, subtitle }) {
   return <div><h2 className="font-display text-2xl font-medium">{title}</h2>{subtitle && <p className="mt-1 text-ink-muted">{subtitle}</p>}</div>
+}
+
+function CoursePillTabs({ active, onChange }) {
+  return (
+    <div className="flex gap-2">
+      {['Short courses', 'Long courses'].map((tab) => (
+        <button
+          key={tab}
+          type="button"
+          onClick={() => onChange(tab)}
+          className={`rounded-full px-4 py-1.5 text-[13px] font-semibold transition ${
+            tab === active
+              ? 'bg-primary text-white'
+              : 'border border-border bg-surface text-ink-muted hover:border-primary/40'
+          }`}
+        >
+          {tab}
+        </button>
+      ))}
+    </div>
+  )
 }
 
 function CourseCard({ course, progress, lastSessionId }) {
@@ -1515,7 +1599,7 @@ function JournalPreview() {
 function BrowseCourses() {
   const [dbCourses, setDbCourses] = useState([])
   const [loadingCourses, setLoadingCourses] = useState(true)
-  const [filter, setFilter] = useState('All')
+  const [courseTypeTab, setCourseTypeTab] = useState('Short courses')
   const [search, setSearch] = useState('')
 
   useEffect(() => {
@@ -1533,25 +1617,17 @@ function BrowseCourses() {
   }, [])
 
   const filtered = dbCourses.filter((c) => {
-    const normalizedStatus = normalizeCourseStatus(c.status)
-    const lowerFilter = filter.toLowerCase()
-    const matchFilter = filter === 'All'
-      || (filter === 'Coming Soon' && normalizedStatus === 'coming_soon')
-      || c.title.toLowerCase().includes(lowerFilter)
-      || (c.level ?? '').toLowerCase().includes(lowerFilter)
+    const isLong = c.course_type === 'long'
+    const matchTab = courseTypeTab === 'Long courses' ? isLong : !isLong
     const matchSearch = !search || c.title.toLowerCase().includes(search.toLowerCase())
-    return matchFilter && matchSearch
+    return matchTab && matchSearch
   })
 
   return (
     <div className="space-y-7">
-      <div className="flex flex-col justify-between gap-3 lg:flex-row">
-        <div className="flex flex-wrap gap-2">
-          {['All', 'Coming Soon', 'Drawing', 'Painting', 'Iconography', 'Foundations'].map((f) => (
-            <button key={f} onClick={() => setFilter(f)} className={`rounded-full px-4 py-1.5 text-[13px] font-semibold ${filter === f ? 'bg-primary text-white' : 'border border-border bg-surface text-ink'}`}>{f}</button>
-          ))}
-        </div>
-        <label className="relative block lg:w-72">
+      <div className="flex flex-wrap items-center gap-3">
+        <CoursePillTabs active={courseTypeTab} onChange={(tab) => { setCourseTypeTab(tab); setSearch('') }} />
+        <label className="relative ml-auto block w-full sm:w-72">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-muted" size={16} />
           <input className="w-full rounded-full border border-border bg-surface py-2 pl-10 pr-4 outline-none focus:border-primary" placeholder="Search courses…" value={search} onChange={(e) => setSearch(e.target.value)} />
         </label>
@@ -1561,7 +1637,7 @@ function BrowseCourses() {
       ) : filtered.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border py-20 text-center">
           <BookOpen className="mx-auto mb-3 text-ink-soft" size={32} />
-          <p className="font-display text-lg font-semibold">{search ? 'No courses match your search.' : 'No courses available yet.'}</p>
+          <p className="font-display text-lg font-semibold">{search ? 'No courses match your search.' : `No ${courseTypeTab.toLowerCase()} available yet.`}</p>
           <p className="mt-1 text-sm text-ink-muted">{search ? 'Try a different keyword.' : 'New courses are coming soon.'}</p>
         </div>
       ) : (
@@ -3556,6 +3632,7 @@ function AdminCourses() {
   const [sessionSaving, setSessionSaving] = useState({})
   const [sessionErrors, setSessionErrors] = useState({})
   const [loadingCourses, setLoadingCourses] = useState(true)
+  const [courseTypeTab, setCourseTypeTab] = useState('Short courses')
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -3757,15 +3834,22 @@ function AdminCourses() {
     }
   }
 
+  const visibleCourses = courses.filter((c) => {
+    const isLong = c.course_type === 'long'
+    return courseTypeTab === 'Long courses' ? isLong : !isLong
+  })
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <SectionTitle title="Courses" subtitle="Create a course first, then open it to add the trailer, question blocks, and sessions." />
-        <Button onClick={() => navigate('/admin/courses/new')}>
+        <Button onClick={() => navigate(courseTypeTab === 'Long courses' ? '/admin/courses/new?type=long' : '/admin/courses/new')}>
           <Plus className="mr-2 inline" size={15} />
           Create Course
         </Button>
       </div>
+
+      <CoursePillTabs active={courseTypeTab} onChange={setCourseTypeTab} />
 
       {false && <AdminEditor title="Create course" action={saving ? 'Saving…' : 'Save course'} onSubmit={handleSave}>
         <div className="grid gap-4 md:grid-cols-2">
@@ -3868,16 +3952,16 @@ function AdminCourses() {
 
       {loadingCourses ? (
         <div className="py-12 text-center text-sm text-ink-muted">Loading courses…</div>
-      ) : courses.length === 0 ? (
+      ) : visibleCourses.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border py-20 text-center">
           <BookOpen className="mx-auto mb-3 text-ink-soft" size={32} />
-          <p className="font-display text-lg font-semibold">No courses yet.</p>
+          <p className="font-display text-lg font-semibold">No {courseTypeTab.toLowerCase()} yet.</p>
           <p className="mt-1 text-sm text-ink-muted">Start with a course shell, then step into it to add the trailer, the three question blocks, and session content.</p>
-          <Button className="mt-5" onClick={() => navigate('/admin/courses/new')}>Create your first course</Button>
+          <Button className="mt-5" onClick={() => navigate(courseTypeTab === 'Long courses' ? '/admin/courses/new?type=long' : '/admin/courses/new')}>Create your first course</Button>
         </div>
       ) : (
         <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {courses.map((course) => <CourseAdminCard key={course.id} course={course} enrollments={enrollmentsByCourse[course.id] ?? []} onStatusChange={handleStatusChange} onDelete={handleDelete} />)}
+          {visibleCourses.map((course) => <CourseAdminCard key={course.id} course={course} enrollments={enrollmentsByCourse[course.id] ?? []} onStatusChange={handleStatusChange} onDelete={handleDelete} />)}
         </section>
       )}
     </div>
@@ -3886,6 +3970,7 @@ function AdminCourses() {
 
 function AdminCourseEditor() {
   const { courseId } = useParams()
+  const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const { profile } = useAuth()
   const isCreateMode = !courseId
@@ -3902,6 +3987,7 @@ function AdminCourseEditor() {
   const [videoUrl, setVideoUrl] = useState('')
   const [sessionReferenceFile, setSessionReferenceFile] = useState(null)
   const [sessionResourceFile, setSessionResourceFile] = useState(null)
+  const [courseType, setCourseType] = useState(() => searchParams.get('type') === 'long' ? 'long' : 'short')
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -3942,6 +4028,7 @@ function AdminCourseEditor() {
         setWhoIsThisFor(courseData.who_is_this_for ?? '')
         setMaterialsNeeded(courseData.materials_needed ?? '')
         setAccessDetails(courseData.access_details ?? '')
+        setCourseType(courseData.course_type === 'long' ? 'long' : 'short')
       }
 
       setSessions(sessionsData ?? [])
@@ -3983,6 +4070,7 @@ function AdminCourseEditor() {
       status,
       thumbnail_url: thumbnailUrl,
       instructor_id: course?.instructor_id ?? profile?.id,
+      course_type: courseType,
     }
 
     const query = isCreateMode
