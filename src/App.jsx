@@ -92,6 +92,7 @@ const longCourseBlueprint = {
   instructor: 'Drdha Vrata Gorrick',
   price: 'Enrollment by request',
   duration_label: '2 years',
+  module_count: 6,
   session_count: 36,
   level: 'Guided foundational to advanced study',
   art: art.mahavidyas,
@@ -109,9 +110,6 @@ const longCourseBlueprint = {
     'Students attend scheduled live classes with Drdha, practice between sessions using guided assignments and references, and revisit concluded class recordings inside the LMS. The learning rhythm is built around steady correction, repetition, and refinement rather than rushing through content.',
   timeline_commitment:
     'The program is designed as a two-year progression, not a quick workshop. Students move through six modules in sequence, with live sessions, guided review, and repeated practice forming the rhythm of learning. The commitment is steady and spacious: enough time to absorb proportion, iconographic meaning, composition, and finish without rushing the sacred form.',
-  instructor_title: 'Traditional Shilpa Shastra artist',
-  instructor_bio:
-    'Drdha Vrata Gorrick teaches traditional Indian devotional art through the discipline of Shilpa Shastra, with a focus on careful proportion, sacred form, and steady devotional practice.',
   modules: [
     {
       title: 'Module 1 - Foundations of Sacred Drawing',
@@ -2119,12 +2117,11 @@ function LongCourseDetail({
     .map((item) => item.trim())
     .filter(Boolean)
   const timelineCommitment = displayCourse.timeline_commitment ?? longCourseBlueprint.timeline_commitment
-  const instructorTitle = displayCourse.instructor_title ?? longCourseBlueprint.instructor_title
-  const instructorBio = displayCourse.instructor_bio ?? longCourseBlueprint.instructor_bio
+  const moduleCount = displayCourse.module_count || modules.length
 
   const courseFacts = [
     { label: 'Duration', value: '2 years' },
-    { label: 'Modules', value: `${modules.length} modules` },
+    { label: 'Modules', value: `${moduleCount} modules` },
     { label: 'Sessions', value: `${sessionCount || totalSessions} live sessions` },
     { label: 'Format', value: 'Live + recordings' },
     { label: 'Enrollment', value: 'By request' },
@@ -2142,7 +2139,7 @@ function LongCourseDetail({
             <p className="mt-2.5 text-[15px] text-[#7a6040]">By {instructorName}</p>
             <div className="mt-4 flex flex-wrap gap-2">
               <span className={pill}>2 years</span>
-              <span className={pill}>6 modules</span>
+              <span className={pill}>{moduleCount} modules</span>
               <span className={pill}>Live sessions</span>
               <span className={pill}>Recordings after class</span>
             </div>
@@ -2168,7 +2165,7 @@ function LongCourseDetail({
             <h2 className={sectionHeading}>About this course</h2>
             <p className="mt-4 text-[14px] leading-[1.9] text-[#7a6040]">{displayCourse.description}</p>
             <div className="mt-5 flex flex-wrap gap-2">
-              <span className="rounded-full border border-[#ddc990] bg-[#f5ead8] px-3 py-1 text-[12px] font-semibold text-[#7a6040]">Six-module guided path</span>
+              <span className="rounded-full border border-[#ddc990] bg-[#f5ead8] px-3 py-1 text-[12px] font-semibold text-[#7a6040]">{moduleCount}-module guided path</span>
               <span className="rounded-full border border-[#ddc990] bg-[#f5ead8] px-3 py-1 text-[12px] font-semibold text-[#7a6040]">Live teaching with Drdha</span>
               <span className="rounded-full border border-[#b8d4a8] bg-[#eef5eb] px-3 py-1 text-[12px] font-semibold text-[#5c8a4f]">Concluded sessions become recordings</span>
             </div>
@@ -2182,7 +2179,7 @@ function LongCourseDetail({
                 <p className={eyebrow}>Structure</p>
                 <h2 className={sectionHeading}>Course structure</h2>
               </div>
-              <span className="shrink-0 text-[12px] text-[#9a7a3a]">{modules.length} modules</span>
+              <span className="shrink-0 text-[12px] text-[#9a7a3a]">{moduleCount} modules</span>
             </div>
             <p className="mt-4 text-[13px] leading-[1.8] text-[#7a6040]">
               {displayCourse.course_structure_summary ?? longCourseBlueprint.course_structure_summary}
@@ -2252,7 +2249,7 @@ function LongCourseDetail({
               </p>
               <div className="mt-5 grid gap-3 sm:grid-cols-3">
                 <div><p className={eyebrow}>Length</p><p className="mt-1 font-semibold text-[#1a1208]">2 years</p></div>
-                <div><p className={eyebrow}>Path</p><p className="mt-1 font-semibold text-[#1a1208]">6 sequential modules</p></div>
+                <div><p className={eyebrow}>Path</p><p className="mt-1 font-semibold text-[#1a1208]">{moduleCount} sequential modules</p></div>
                 <div><p className={eyebrow}>Access</p><p className="mt-1 font-semibold text-[#1a1208]">Live sessions + LMS recordings</p></div>
               </div>
             </div>
@@ -2269,11 +2266,11 @@ function LongCourseDetail({
               </div>
               <div>
                 <p className="font-semibold text-[#1a1208]">{instructorName}</p>
-                <p className="mt-0.5 text-[11px] font-semibold uppercase tracking-[0.15em] text-[#9a7a3a]">{instructorTitle}</p>
+                <p className="mt-0.5 text-[11px] font-semibold uppercase tracking-[0.15em] text-[#9a7a3a]">Traditional Shilpa Shastra artist</p>
               </div>
             </div>
             <p className="mt-5 text-[14px] leading-[1.9] text-[#7a6040]">
-              {instructorBio}
+              Drdha Vrata Gorrick teaches traditional Indian devotional art through the discipline of Shilpa Shastra, with a focus on careful proportion, sacred form, and steady devotional practice.
             </p>
             <a href="https://www.divyakala.com/" className="mt-4 inline-flex items-center gap-1 text-[13px] font-semibold text-[#b8861a] transition-colors hover:text-[#9a7a3a]">
               Visit Drdha's portfolio <ChevronRight size={13} />
@@ -4363,6 +4360,7 @@ function AdminCourseEditor() {
   const [description, setDescription] = useState('')
   const [price, setPrice] = useState('')
   const [durationLabel, setDurationLabel] = useState('')
+  const [moduleCountLabel, setModuleCountLabel] = useState('')
   const [sessionCountLabel, setSessionCountLabel] = useState('')
   const [level, setLevel] = useState('')
   const [status, setStatus] = useState('draft')
@@ -4373,8 +4371,6 @@ function AdminCourseEditor() {
   const [courseStructureSummary, setCourseStructureSummary] = useState('')
   const [howLearningWorks, setHowLearningWorks] = useState('')
   const [timelineCommitment, setTimelineCommitment] = useState('')
-  const [instructorTitle, setInstructorTitle] = useState('')
-  const [instructorBio, setInstructorBio] = useState('')
 
   useEffect(() => {
     async function loadCourseEditor() {
@@ -4384,14 +4380,13 @@ function AdminCourseEditor() {
         setSessions([])
         if (courseType === 'long') {
           setDurationLabel((current) => current || '2 years')
+          setModuleCountLabel((current) => current || String(longCourseBlueprint.module_count))
           setSessionCountLabel((current) => current || String(longCourseBlueprint.session_count))
           setLevel((current) => current || longCourseBlueprint.level)
           setDescription((current) => current || longCourseBlueprint.description)
           setCourseStructureSummary((current) => current || longCourseBlueprint.course_structure_summary)
           setHowLearningWorks((current) => current || longCourseBlueprint.how_learning_works)
           setTimelineCommitment((current) => current || longCourseBlueprint.timeline_commitment)
-          setInstructorTitle((current) => current || longCourseBlueprint.instructor_title)
-          setInstructorBio((current) => current || longCourseBlueprint.instructor_bio)
           setWhoIsThisFor((current) => current || longCourseBlueprint.who_is_this_for)
           setMaterialsNeeded((current) => current || longCourseBlueprint.materials_needed)
           setAccessDetails((current) => current || longCourseBlueprint.access_details)
@@ -4410,6 +4405,7 @@ function AdminCourseEditor() {
         setDescription(courseData.description ?? '')
         setPrice(courseData.price ? String(courseData.price / 100) : '')
         setDurationLabel(courseData.duration_label ?? '')
+        setModuleCountLabel(courseData.module_count ? String(courseData.module_count) : '')
         setSessionCountLabel(courseData.session_count ? String(courseData.session_count) : '')
         setLevel(courseData.level ?? '')
         setStatus(normalizeCourseStatus(courseData.status))
@@ -4420,8 +4416,6 @@ function AdminCourseEditor() {
         setCourseStructureSummary(courseData.course_structure_summary ?? '')
         setHowLearningWorks(courseData.how_learning_works ?? '')
         setTimelineCommitment(courseData.timeline_commitment ?? '')
-        setInstructorTitle(courseData.instructor_title ?? '')
-        setInstructorBio(courseData.instructor_bio ?? '')
         setCourseType(courseData.course_type === 'long' ? 'long' : 'short')
       }
 
@@ -4480,12 +4474,11 @@ function AdminCourseEditor() {
         who_is_this_for: whoIsThisFor.trim() || null,
         materials_needed: materialsNeeded.trim() || null,
         access_details: accessDetails.trim() || null,
+        module_count: moduleCountLabel ? parseInt(moduleCountLabel) : null,
         session_count: sessionCountLabel ? parseInt(sessionCountLabel) : null,
         course_structure_summary: courseStructureSummary.trim() || null,
         how_learning_works: howLearningWorks.trim() || null,
         timeline_commitment: timelineCommitment.trim() || null,
-        instructor_title: instructorTitle.trim() || null,
-        instructor_bio: instructorBio.trim() || null,
       }
       const { error: extendedError } = await saveExtendedCourseFields(data.id, extendedFields)
 
@@ -4656,6 +4649,7 @@ function AdminCourseEditor() {
           </div>
           <div className="grid gap-4 md:grid-cols-3">
             <Input label="Duration" value={durationLabel} onChange={(e) => setDurationLabel(e.target.value)} />
+            {isLongCourseEditor && <Input label="Modules" type="number" min="0" value={moduleCountLabel} onChange={(e) => setModuleCountLabel(e.target.value)} />}
             <Input label={isLongCourseEditor ? 'Planned live sessions' : 'Number of sessions'} type="number" min="0" value={sessionCountLabel} onChange={(e) => setSessionCountLabel(e.target.value)} />
             <Input label="Level" value={level} onChange={(e) => setLevel(e.target.value)} />
           </div>
@@ -4708,19 +4702,6 @@ function AdminCourseEditor() {
                   placeholder="Set expectations for the two-year rhythm, sequence, practice load, and review cadence."
                   value={timelineCommitment}
                   onChange={(e) => setTimelineCommitment(e.target.value)}
-                />
-              </label>
-              <div className="grid gap-4 md:grid-cols-2">
-                <Input label="Instructor title" value={instructorTitle} onChange={(e) => setInstructorTitle(e.target.value)} />
-                <Input label="Instructor name shown" value="Drdha Vrata Gorrick" disabled />
-              </div>
-              <label className="block">
-                <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-ink-muted">Meet your instructor section</span>
-                <textarea
-                  className="min-h-28 w-full rounded-lg border border-border bg-surface px-4 py-3 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
-                  placeholder="Instructor bio shown on the course detail page."
-                  value={instructorBio}
-                  onChange={(e) => setInstructorBio(e.target.value)}
                 />
               </label>
             </>
