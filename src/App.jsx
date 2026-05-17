@@ -842,7 +842,14 @@ function Auth() {
     setError('')
     const name = `${firstName} ${lastName}`.trim()
 
-    const { data, error: signUpError } = await supabase.auth.signUp({ email, password })
+    const { data, error: signUpError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { name: `${firstName} ${lastName}`.trim() },
+        emailRedirectTo: undefined,
+      },
+    })
     if (signUpError) {
       setError(signUpError.message)
       setLoading(false)
