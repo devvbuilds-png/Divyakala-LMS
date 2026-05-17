@@ -2,7 +2,7 @@
 
 This file is the living memory for the Divyakala LMS project. Every Claude Code session and every future Claude conversation should read this first. Update it after every major decision or build session.
 
-Last updated: May 9, 2026 (session 23 — Loop 5 + Loop 6 deferred to v2)
+Last updated: May 17, 2026 (session 24 — verification pass, corrected stale entries)
 
 ---
 
@@ -18,11 +18,11 @@ A full-stack LMS for Drdha Vrata Gorrick (Divyakala), a traditionally trained Sh
 
 ## Tech Stack (locked)
 
-- **Frontend:** React 18 + Vite
-- **Styling:** Tailwind CSS
-- **Routing:** React Router
+- **Frontend:** React 19 + Vite 8
+- **Styling:** Tailwind CSS 3.4
+- **Routing:** React Router DOM 7
 - **Icons:** lucide-react
-- **Canvas:** @tldraw/tldraw (in lesson player Canvas tab)
+- **Canvas:** @tldraw/tldraw 5.0 (in lesson player Canvas tab)
 - **Backend:** Supabase (database + auth + storage + real-time)
 - **Hosting:** Vercel
 - **Font:** Poppins everywhere (the app shifted from the original Cormorant/Crimson brief to match the LMS screenshot aesthetic — compact, warm, refined)
@@ -31,11 +31,10 @@ A full-stack LMS for Drdha Vrata Gorrick (Divyakala), a traditionally trained Sh
 
 ## Repository
 
-Location: `D:\AI projects\Divyakala\Codex prototype\divyakala-lms`
+Location: `D:\AI projects\Divyakala\shortcourse-deploy-worktree\Codex prototype\divyakala-lms`
 
 Key files:
 - `src/App.jsx` — currently monolithic, contains all routing + pages + components. Do NOT refactor until after the demo is shipped and Drdha says yes.
-- `src/data/*.json` — mock seed data
 - `src/index.css` — global styles, Poppins import, root font size 13px
 - `tailwind.config.js` — Divyakala color tokens
 - `public/art/` — Drdha's artwork assets (webp)
@@ -150,7 +149,7 @@ Admin Settings toggle: "Unlock next lesson only after assignment approval." Basi
 ### Auth
 - Students: email OTP
 - Admin: fixed credential — `drdha@divyakala.com` / password set in Supabase dashboard
-- Role stored in `users` table: `student | admin`
+- Role stored in `profiles` table: `student | admin`
 
 ### Storage Buckets
 - `cards` — admin uploads (videos, images, PDFs)
@@ -170,7 +169,7 @@ Accessible from Admin Settings:
 
 **Empty state (default):** No courses, students, or workshops. Shows Drdha the creation flow.
 
-**Demo state:** "Load demo data" button seeds the Srinivasa course (6 sessions, cards attached), 1 enrolled student (Dev Saxena, 40% progress, 1 awaiting submission), 2-3 workshops, sample notifications.
+**Demo state:** "Load demo" button seeds 2 courses (Srinivasa published + Talamana coming soon), 6 sessions for Srinivasa, 1 enrollment at 33% progress (uses the logged-in admin user, not a hardcoded student), 2 reviewed submissions (1 approved with annotation, 1 needs_resubmission), and 2 notifications. No workshops are seeded — workshops are deferred to v2.
 
 **Reset:** "Reset to empty" wipes all user-generated data.
 
@@ -208,9 +207,9 @@ Course publishing, card upload, session+card assignment, student submission uplo
 8. ✅ Admin review → feedback → real-time student update (Loop 4)
 9. ~~Workshop create/publish → student Workshops page (Loop 5)~~ — v2
 10. ~~Lesson locking rule from Settings (Loop 6)~~ — v2
-11. ⬜ Demo seed + reset button (Admin Settings)
+11. ✅ Demo seed + reset button (Admin Settings — loadDemoData + clearAllData implemented)
 12. ⬜ Student-side cleanup (certificate, notifications, journal, CourseDetail, placeholders)
-13. ⬜ Deploy to Vercel, smoke test
+13. ✅ Deploy to Vercel (live — shortcourse-deploy-worktree branch)
 
 ---
 
@@ -296,6 +295,10 @@ create table sessions (
   video_url text,
   position int not null,
   is_preview boolean default false,
+  reference_url text,   -- added via supabase-session-reference-resources.sql
+  reference_name text,
+  resource_url text,
+  resource_name text,
   created_at timestamptz default now()
 );
 
@@ -404,7 +407,7 @@ create table notifications (
 
 ---
 
-## What Has Been Built (through session 7)
+## What Has Been Built (through session 23)
 
 ### New files
 - `src/lib/supabase.js` — single Supabase client, imported everywhere. Never re-initialize.
@@ -598,6 +601,8 @@ The table names in the deployed schema use `profiles` (not `users`). Always use 
 - `CourseDetail()` has an active `return <CourseDetailTabs ... />` followed by an unreachable older stacked-layout return. It builds, but should be deleted once the new layout is accepted.
 - `activeTab` state is currently unused by the visible course detail design because the UI is no longer tabbed.
 - `AdminCards()` has unreachable old CRUD code after the new coming-soon return. Delete it during cleanup.
+- `adminStudents` const (line ~255) is an old mock array — AdminStudents now reads real Supabase data. Remove it during cleanup.
+- Legacy inline course creation JSX inside `AdminCourses` still exists behind `{false && ...}`. Remove it during cleanup.
 
 ### Admin Playlists
 - `/admin/playlists` is currently a simple "Coming soon" page
@@ -610,13 +615,13 @@ The table names in the deployed schema use `profiles` (not `users`). Always use 
   - Courses
   - Assignments
   - Students
-  - Demo Guide (`/admin/settings`)
+  - Demo Controls (`/admin/settings`)
 - Admin sidebar separates future modules below a "Coming soon" divider:
   - Cards
   - Playlists
   - Workshops
 - `/admin/workshops` is now a Coming Soon page matching Cards and Playlists. Workshop CRUD UI was removed from the visible demo path because workshops are not wired yet.
-- `/admin/settings` has been repurposed as a **Demo Guide** page instead of fake settings. It explains what Drdha can try now, links to Courses/Assignments/Students, and lists Cards/Playlists/Workshops as intentionally upcoming.
+- `/admin/settings` is the **Demo Controls** page with "Load demo" and "Clear all data" buttons. Load demo seeds 2 courses, 6 sessions, an enrollment at 33% progress, 2 reviewed submissions (approved + needs_resubmission), and 2 notifications. Clear all wipes all data created by the logged-in admin user.
 - `/admin` dashboard was redesigned away from crowded fake metrics. It now starts with a full-screen warm greeting hero for Drdha, art decorations, CTA buttons to Demo Guide/Courses, and a down-arrow scroll cue.
 - The hero no longer shows the floating "Demo path" text box. The right side uses a four-artwork cluster with no decorative outline circles.
 - Below the dashboard hero, the content is intentionally sparse:
