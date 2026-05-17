@@ -426,6 +426,7 @@ function App() {
       <Routes>
         <Route path="/" element={<RootRedirect />} />
         <Route path="/auth/:mode" element={<Auth />} />
+        <Route path="/auth/callback" element={<AuthCallback />} />
         <Route path="/admin/auth" element={<AdminAuth />} />
         <Route path="/admin/*" element={<AdminProtected><AdminShell /></AdminProtected>} />
         <Route element={<Protected><Shell /></Protected>}>
@@ -843,7 +844,10 @@ function Auth() {
       }
     }
 
-    const { error } = await supabase.auth.signInWithOtp({ email })
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: 'https://divyakala-lms.vercel.app/auth/callback' },
+    })
     if (error) setError(error.message)
     else setOtpSent(true)
     setLoading(false)
@@ -919,6 +923,22 @@ function Auth() {
           </Link>
         </div>
       </div>
+    </div>
+  )
+}
+
+function AuthCallback() {
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    supabase.auth.getSession().then(() => {
+      navigate('/', { replace: true })
+    })
+  }, [])
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-bg">
+      <p className="text-ink-muted">Signing you in…</p>
     </div>
   )
 }
