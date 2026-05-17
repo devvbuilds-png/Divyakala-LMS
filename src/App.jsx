@@ -85,6 +85,115 @@ const courses = [
   { id: 'mahavidyas', title: 'Iconography of the Mahavidyas', instructor: 'Drdha Vrata Gorrick', price: 'Notify me', duration: '8 sessions', sessions: 8, level: 'Coming soon', available: false, art: art.mahavidyas, description: 'A forthcoming study of sacred forms, symbolism, and visual language.', sessionsList: [] },
 ]
 
+const longCourseBlueprint = {
+  id: 'divyakala-long-course',
+  course_type: 'long',
+  title: 'Divyakala Two-Year Sacred Art Program',
+  instructor: 'Drdha Vrata Gorrick',
+  price: 'Enrollment by request',
+  duration_label: '2 years',
+  session_count: 36,
+  level: 'Guided foundational to advanced study',
+  art: art.mahavidyas,
+  description:
+    'A two-year live learning journey into traditional Indian devotional art, built for students who want steady guidance, disciplined practice, and a deeper understanding of sacred image-making. Across six carefully sequenced modules, students study proportion, iconographic grammar, line, ornament, composition, color, and devotional presence through live sessions with Drdha. Each concluded session is made available as a recording inside the LMS so students can revisit demonstrations, refine assignments, and continue their practice between classes.',
+  who_is_this_for:
+    'This program is for committed students who want more than a short recorded workshop: artists, seekers, designers, and devotees who are ready to build a long-term foundation in sacred drawing and painting through live instruction and regular practice.',
+  materials_needed:
+    'Students begin with simple drawing materials: pencils, eraser, ruler, compass, good drawing paper, and a sketchbook. As the program moves into color and finishing, Drdha will guide students toward suitable pigments, brushes, papers, and reference materials for each module.',
+  access_details:
+    'Long-course students receive access to recordings of concluded live sessions for review during the program. Access policies can be finalized when the enrollment and batch flow is built.',
+  course_structure_summary:
+    'Each module is taught through live sessions. After a session concludes, its recording becomes available in the LMS for review and continued practice.',
+  how_learning_works:
+    'Students attend scheduled live classes with Drdha, practice between sessions using guided assignments and references, and revisit concluded class recordings inside the LMS. The learning rhythm is built around steady correction, repetition, and refinement rather than rushing through content.',
+  timeline_commitment:
+    'The program is designed as a two-year progression, not a quick workshop. Students move through six modules in sequence, with live sessions, guided review, and repeated practice forming the rhythm of learning. The commitment is steady and spacious: enough time to absorb proportion, iconographic meaning, composition, and finish without rushing the sacred form.',
+  instructor_title: 'Traditional Shilpa Shastra artist',
+  instructor_bio:
+    'Drdha Vrata Gorrick teaches traditional Indian devotional art through the discipline of Shilpa Shastra, with a focus on careful proportion, sacred form, and steady devotional practice.',
+  modules: [
+    {
+      title: 'Module 1 - Foundations of Sacred Drawing',
+      description:
+        'Students begin with the discipline of observation, light construction, and proportion. This module builds the quiet habits needed before any divine form is drawn in detail.',
+      sessions: [
+        'Orientation to the Divyakala method and devotional practice',
+        'Line, axis, symmetry, and the discipline of slow looking',
+        'Introduction to Shilpa Shastra as visual grammar',
+        'Using grids without losing grace in the drawing',
+        'Foundational studies of posture, balance, and gesture',
+        'Review circle: first construction studies and corrections',
+      ],
+    },
+    {
+      title: 'Module 2 - Talamana and Divine Proportion',
+      description:
+        'This module develops measured confidence. Students study classical proportional systems and learn how structure supports beauty, dignity, and spiritual presence.',
+      sessions: [
+        'The tala system and measured divisions of the sacred figure',
+        'Head, torso, limbs, and the relationship of each division',
+        'Standing postures: central axis, shoulders, knees, and feet',
+        'Seated postures and the architecture of stillness',
+        'Correcting proportion through overlays and redrawing',
+        'Module review: complete measured figure construction',
+      ],
+    },
+    {
+      title: 'Module 3 - Iconographic Language and Symbol',
+      description:
+        'Students move from measurement into meaning: mudras, ayudhas, crowns, ornaments, and the visual codes that help a form become recognizable and reverent.',
+      sessions: [
+        'Reading iconography: form, attribute, and meaning',
+        'Mudras and hand gestures in devotional drawing',
+        'Crowns, halos, jewelry, and sacred ornament systems',
+        'Ayudhas and symbolic objects: placement and clarity',
+        'Expression, gaze, and the devotional mood of the face',
+        'Module review: annotated iconographic study sheet',
+      ],
+    },
+    {
+      title: 'Module 4 - Composition, Narrative, and Temple Aesthetics',
+      description:
+        'This module expands the single figure into a complete visual field. Students study framing, supporting forms, narrative balance, and the quiet order of traditional compositions.',
+      sessions: [
+        'Framing the deity: pedestal, arch, aura, and sacred space',
+        'Compositional hierarchy and the viewer\'s devotional path',
+        'Secondary figures, attendants, and symbolic surroundings',
+        'Temple references: translating sculpture into drawing',
+        'From study sketch to resolved devotional composition',
+        'Module critique: composition thumbnails and final layout',
+      ],
+    },
+    {
+      title: 'Module 5 - Color, Surface, and Devotional Finish',
+      description:
+        'Students learn how color supports bhava rather than decoration alone. The focus is on restraint, luminosity, rhythm, and making choices that serve the sacred form.',
+      sessions: [
+        'Color as mood: warmth, restraint, and sacred emphasis',
+        'Preparing the drawing for painting or finished rendering',
+        'Layering, edges, and preserving clarity of the form',
+        'Ornament, cloth, and skin tones with devotional restraint',
+        'Finishing practices: corrections, patience, and polish',
+        'Module review: color study and finished-detail submission',
+      ],
+    },
+    {
+      title: 'Module 6 - Personal Sadhana Project',
+      description:
+        'The final module brings the learning together through a guided capstone work. Students plan, draw, refine, and present a complete sacred artwork with Drdha\'s feedback.',
+      sessions: [
+        'Choosing the final subject and gathering references',
+        'Capstone planning: intention, structure, and timeline',
+        'Drawing review: proportion, iconography, and composition',
+        'Mid-project critique and individual correction points',
+        'Final refinements, documentation, and presentation',
+        'Closing review: continuing the practice beyond the program',
+      ],
+    },
+  ],
+}
+
 const workshops = [
   { title: 'Iconography Q&A: Mudras & Their Meanings', date: 'Saturday, 14 December 2025', time: '7:00 PM IST', day: '14', month: 'DEC', duration: '1 hour', description: 'Bring your questions about hand gestures and their symbolism. Drdha will draw examples live and answer questions.' },
   { title: 'Live Painting Demo: Watercolor Techniques for Devotional Art', date: 'Thursday, 8 January 2026', time: '7:00 PM IST', day: '08', month: 'JAN', duration: '90 min', description: 'A gentle study of transparent color, devotional restraint, and luminous surfaces.' },
@@ -1685,7 +1794,9 @@ function CourseDetail() {
   const { courseId } = useParams()
   const navigate = useNavigate()
   const { session } = useAuth()
-  const fallbackCourse = courses.find((c) => c.id === courseId) || courses[0]
+  const fallbackCourse = courseId === longCourseBlueprint.id
+    ? longCourseBlueprint
+    : courses.find((c) => c.id === courseId) || courses[0]
   const [course, setCourse] = useState(null)
   const [courseSessions, setCourseSessions] = useState([])
   const [enrollment, setEnrollment] = useState(null)
@@ -1718,7 +1829,10 @@ function CourseDetail() {
     loadCourseDetail()
   }, [courseId, session?.user?.id])
 
-  const displayCourse = course ?? fallbackCourse
+  const isLongCourse = course?.course_type === 'long' || fallbackCourse.course_type === 'long'
+  const displayCourse = isLongCourse
+    ? { ...longCourseBlueprint, ...(course ?? fallbackCourse), modules: longCourseBlueprint.modules }
+    : course ?? fallbackCourse
   const previewSession = courseSessions.find((session) => session.is_preview) ?? courseSessions[0] ?? null
   const sessionCount = courseSessions.length || displayCourse.session_count || displayCourse.sessions || 0
   const priceDisplay = typeof displayCourse.price === 'number'
@@ -1791,6 +1905,21 @@ function CourseDetail() {
 
   if (loading) {
     return <div className="py-16 text-center text-sm text-ink-muted">Loading course…</div>
+  }
+
+  if (isLongCourse) {
+    return (
+      <LongCourseDetail
+        displayCourse={displayCourse}
+        sessionCount={sessionCount}
+        priceDisplay={priceDisplay}
+        instructorName={instructorName}
+        instructorInitials={instructorInitials}
+        faqItems={faqItems}
+        open={open}
+        setOpen={setOpen}
+      />
+    )
   }
 
   return (
@@ -1958,6 +2087,247 @@ function SessionPill({ session, idx, courseId, isEnrolled }) {
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+function LongCourseDetail({
+  displayCourse,
+  sessionCount,
+  priceDisplay,
+  instructorName,
+  instructorInitials,
+  faqItems,
+  open,
+  setOpen,
+}) {
+  const [openModule, setOpenModule] = useState(0)
+  const modules = displayCourse.modules ?? longCourseBlueprint.modules
+  const totalSessions = modules.reduce((sum, module) => sum + module.sessions.length, 0)
+  const pill = 'rounded-full bg-[#ede0ba] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#9a7a3a]'
+  const eyebrow = 'text-[10px] font-semibold uppercase tracking-[0.26em] text-[#9a7a3a]'
+  const sectionHeading = 'mt-1.5 font-display text-[1.35rem] font-semibold leading-snug text-[#1a1208]'
+  const divider = 'border-t border-[#e8d8a8]'
+  const longFaqItems = faqItems.map(([title, copy]) => {
+    if (title === 'How long do I have access?') {
+      return [title, displayCourse.access_details ?? copy]
+    }
+    return [title, copy]
+  })
+  const howLearningCards = (displayCourse.how_learning_works ?? longCourseBlueprint.how_learning_works)
+    .split(/\n+/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+  const timelineCommitment = displayCourse.timeline_commitment ?? longCourseBlueprint.timeline_commitment
+  const instructorTitle = displayCourse.instructor_title ?? longCourseBlueprint.instructor_title
+  const instructorBio = displayCourse.instructor_bio ?? longCourseBlueprint.instructor_bio
+
+  const courseFacts = [
+    { label: 'Duration', value: '2 years' },
+    { label: 'Modules', value: `${modules.length} modules` },
+    { label: 'Sessions', value: `${sessionCount || totalSessions} live sessions` },
+    { label: 'Format', value: 'Live + recordings' },
+    { label: 'Enrollment', value: 'By request' },
+  ]
+
+  return (
+    <div>
+      <section className="-mx-4 -mt-5 bg-[#ede3c6] px-4 py-8 sm:-mx-5 sm:px-5 lg:-mx-5 lg:px-5 lg:py-10">
+        <div className="grid gap-7 lg:grid-cols-[1fr_0.85fr] lg:items-center">
+          <div>
+            <p className={eyebrow}>Long course - two-year live program</p>
+            <h1 className="mt-3 max-w-2xl font-display text-[1.9rem] font-semibold leading-[1.2] text-[#1a1208] sm:text-[2.25rem]">
+              {displayCourse.title}
+            </h1>
+            <p className="mt-2.5 text-[15px] text-[#7a6040]">By {instructorName}</p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <span className={pill}>2 years</span>
+              <span className={pill}>6 modules</span>
+              <span className={pill}>Live sessions</span>
+              <span className={pill}>Recordings after class</span>
+            </div>
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <span className="font-display text-[1.55rem] font-semibold text-[#b8861a]">{priceDisplay}</span>
+              <Button type="button">Request Enrollment</Button>
+              <a href="#course-trailer">
+                <Button type="button" variant="secondary">Watch Free Preview</Button>
+              </a>
+            </div>
+          </div>
+
+          <div id="course-trailer">
+            <CourseTrailer url={displayCourse.trailer_url} title={displayCourse.title} />
+          </div>
+        </div>
+      </section>
+
+      <div className="mt-7 grid gap-7 lg:grid-cols-[1fr_256px] lg:items-start">
+        <div>
+          <section className="pb-8">
+            <p className={eyebrow}>Overview</p>
+            <h2 className={sectionHeading}>About this course</h2>
+            <p className="mt-4 text-[14px] leading-[1.9] text-[#7a6040]">{displayCourse.description}</p>
+            <div className="mt-5 flex flex-wrap gap-2">
+              <span className="rounded-full border border-[#ddc990] bg-[#f5ead8] px-3 py-1 text-[12px] font-semibold text-[#7a6040]">Six-module guided path</span>
+              <span className="rounded-full border border-[#ddc990] bg-[#f5ead8] px-3 py-1 text-[12px] font-semibold text-[#7a6040]">Live teaching with Drdha</span>
+              <span className="rounded-full border border-[#b8d4a8] bg-[#eef5eb] px-3 py-1 text-[12px] font-semibold text-[#5c8a4f]">Concluded sessions become recordings</span>
+            </div>
+          </section>
+
+          <div className={divider} />
+
+          <section className="py-8">
+            <div className="flex items-baseline justify-between gap-4">
+              <div>
+                <p className={eyebrow}>Structure</p>
+                <h2 className={sectionHeading}>Course structure</h2>
+              </div>
+              <span className="shrink-0 text-[12px] text-[#9a7a3a]">{modules.length} modules</span>
+            </div>
+            <p className="mt-4 text-[13px] leading-[1.8] text-[#7a6040]">
+              {displayCourse.course_structure_summary ?? longCourseBlueprint.course_structure_summary}
+            </p>
+            <div className="mt-5 space-y-3">
+              {modules.map((module, index) => {
+                const expanded = openModule === index
+                return (
+                  <article key={module.title} className="overflow-hidden rounded-xl border border-[#ddc990] bg-[#faf3e4]">
+                    <button
+                      type="button"
+                      onClick={() => setOpenModule(expanded ? -1 : index)}
+                      className="flex w-full items-start justify-between gap-4 px-4 py-4 text-left"
+                    >
+                      <div className="flex gap-3">
+                        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-[#ddc990] bg-[#f0e4c4] font-display text-sm font-semibold text-[#b8861a]">
+                          {index + 1}
+                        </div>
+                        <div>
+                          <h3 className="font-display text-[1.05rem] font-semibold leading-snug text-[#1a1208]">{module.title}</h3>
+                          <p className="mt-1 text-[12px] text-[#9a7a3a]">{module.sessions.length} sessions</p>
+                        </div>
+                      </div>
+                      <ChevronRight size={16} className={`mt-1 shrink-0 text-[#c5b090] transition-transform ${expanded ? 'rotate-90' : ''}`} />
+                    </button>
+                    {expanded && (
+                      <div className="border-t border-[#e8d8a8] px-4 pb-5 pt-4">
+                        <p className="text-[13px] leading-[1.8] text-[#7a6040]">{module.description}</p>
+                        <ol className="mt-4 space-y-2">
+                          {module.sessions.map((sessionTitle, sessionIndex) => (
+                            <li key={sessionTitle} className="flex gap-3 rounded-lg border border-[#eadbb5] bg-white/55 px-3 py-2.5">
+                              <span className="mt-0.5 text-[11px] font-semibold text-[#b8861a]">{String(sessionIndex + 1).padStart(2, '0')}</span>
+                              <span className="text-[13px] leading-6 text-[#1a1208]">{sessionTitle}</span>
+                            </li>
+                          ))}
+                        </ol>
+                      </div>
+                    )}
+                  </article>
+                )
+              })}
+            </div>
+          </section>
+
+          <div className={divider} />
+
+          <section className="py-8">
+            <p className={eyebrow}>Method</p>
+            <h2 className={sectionHeading}>How learning works</h2>
+            <div className="mt-5 space-y-3">
+              {howLearningCards.map((copy, index) => (
+                <div key={`${index}-${copy}`} className="rounded-xl border border-[#ddc990] bg-[#faf3e4] p-4">
+                  <p className="text-[13px] leading-[1.8] text-[#7a6040]">{copy}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <div className={divider} />
+
+          <section className="py-8">
+            <p className={eyebrow}>Commitment</p>
+            <h2 className={sectionHeading}>Timeline and commitment</h2>
+            <div className="mt-5 rounded-xl border border-[#ddc990] bg-[#faf3e4] p-5">
+              <p className="text-[14px] leading-[1.9] text-[#7a6040]">
+                {timelineCommitment}
+              </p>
+              <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                <div><p className={eyebrow}>Length</p><p className="mt-1 font-semibold text-[#1a1208]">2 years</p></div>
+                <div><p className={eyebrow}>Path</p><p className="mt-1 font-semibold text-[#1a1208]">6 sequential modules</p></div>
+                <div><p className={eyebrow}>Access</p><p className="mt-1 font-semibold text-[#1a1208]">Live sessions + LMS recordings</p></div>
+              </div>
+            </div>
+          </section>
+
+          <div className={divider} />
+
+          <section className="py-8">
+            <p className={eyebrow}>Instructor</p>
+            <h2 className={sectionHeading}>Meet your instructor</h2>
+            <div className="mt-5 flex gap-4">
+              <div className="grid h-[52px] w-[52px] shrink-0 place-items-center rounded-full border border-[#ddc990] bg-[#f0e6cc] font-display text-lg font-semibold text-[#b8861a]">
+                {instructorInitials}
+              </div>
+              <div>
+                <p className="font-semibold text-[#1a1208]">{instructorName}</p>
+                <p className="mt-0.5 text-[11px] font-semibold uppercase tracking-[0.15em] text-[#9a7a3a]">{instructorTitle}</p>
+              </div>
+            </div>
+            <p className="mt-5 text-[14px] leading-[1.9] text-[#7a6040]">
+              {instructorBio}
+            </p>
+            <a href="https://www.divyakala.com/" className="mt-4 inline-flex items-center gap-1 text-[13px] font-semibold text-[#b8861a] transition-colors hover:text-[#9a7a3a]">
+              Visit Drdha's portfolio <ChevronRight size={13} />
+            </a>
+          </section>
+
+          <div className={divider} />
+
+          <section className="py-8">
+            <p className={eyebrow}>Before you begin</p>
+            <h2 className={sectionHeading}>Frequently asked questions</h2>
+            <div className="mt-5">
+              {longFaqItems.map(([title, copy]) => (
+                <div key={title} className="border-b border-[#e8d8a8] last:border-b-0">
+                  <button
+                    className="faq-row flex w-full items-center justify-between gap-4 py-4 text-left text-[13px] font-semibold text-[#1a1208]"
+                    onClick={() => setOpen(open === title ? '' : title)}
+                  >
+                    <span className="faq-label transition-colors duration-150">{title}</span>
+                    <ChevronRight size={15} className={`faq-icon shrink-0 text-[#c5b090] transition-all duration-150 ${open === title ? 'rotate-90' : ''}`} />
+                  </button>
+                  {open === title && <p className="pb-5 text-[13px] leading-[1.8] text-[#7a6040]">{copy}</p>}
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+
+        <div className="hidden lg:block lg:sticky lg:top-4">
+          <div className="mb-3 overflow-hidden rounded-xl border border-[#ddc990] bg-[#f5ead8]">
+            {displayCourse.thumbnail_url
+              ? <img src={displayCourse.thumbnail_url} alt={displayCourse.title} className="w-full object-contain" />
+              : <img src={artImages[displayCourse.art ?? art.mahavidyas]} alt={displayCourse.title} className="w-full object-contain" />
+            }
+          </div>
+          <div className="rounded-xl border border-[#ddc990] bg-white p-5 shadow-sm">
+            <p className="font-display text-[1.45rem] font-semibold text-[#b8861a]">{priceDisplay}</p>
+            <div className="mt-3 flex flex-col gap-2">
+              <Button type="button" className="w-full justify-center">Request Enrollment</Button>
+              <a href="#course-trailer" className="block">
+                <Button type="button" variant="secondary" className="w-full justify-center">Watch Free Preview</Button>
+              </a>
+            </div>
+            <div className="mt-5 space-y-2.5 border-t border-[#ede0ba] pt-4">
+              {courseFacts.map(({ label, value }) => (
+                <div key={label} className="flex items-baseline justify-between gap-2">
+                  <span className="text-[12px] text-[#9a7a3a]">{label}</span>
+                  <span className="text-right text-[12px] font-semibold text-[#1a1208]">{value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
@@ -3592,7 +3962,7 @@ function AdminCards() {
             <p className="mt-1 text-sm text-ink-muted">{search ? 'Try a different keyword.' : 'Create your first card using the form.'}</p>
           </div>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
             {filtered.map((card) => <AdminCard key={card.id} card={card} onDelete={handleDelete} onTogglePublish={handlePublish} />)}
           </div>
         )}
@@ -4000,6 +4370,11 @@ function AdminCourseEditor() {
   const [whoIsThisFor, setWhoIsThisFor] = useState('')
   const [materialsNeeded, setMaterialsNeeded] = useState('')
   const [accessDetails, setAccessDetails] = useState('')
+  const [courseStructureSummary, setCourseStructureSummary] = useState('')
+  const [howLearningWorks, setHowLearningWorks] = useState('')
+  const [timelineCommitment, setTimelineCommitment] = useState('')
+  const [instructorTitle, setInstructorTitle] = useState('')
+  const [instructorBio, setInstructorBio] = useState('')
 
   useEffect(() => {
     async function loadCourseEditor() {
@@ -4007,6 +4382,20 @@ function AdminCourseEditor() {
       if (isCreateMode) {
         setCourse(null)
         setSessions([])
+        if (courseType === 'long') {
+          setDurationLabel((current) => current || '2 years')
+          setSessionCountLabel((current) => current || String(longCourseBlueprint.session_count))
+          setLevel((current) => current || longCourseBlueprint.level)
+          setDescription((current) => current || longCourseBlueprint.description)
+          setCourseStructureSummary((current) => current || longCourseBlueprint.course_structure_summary)
+          setHowLearningWorks((current) => current || longCourseBlueprint.how_learning_works)
+          setTimelineCommitment((current) => current || longCourseBlueprint.timeline_commitment)
+          setInstructorTitle((current) => current || longCourseBlueprint.instructor_title)
+          setInstructorBio((current) => current || longCourseBlueprint.instructor_bio)
+          setWhoIsThisFor((current) => current || longCourseBlueprint.who_is_this_for)
+          setMaterialsNeeded((current) => current || longCourseBlueprint.materials_needed)
+          setAccessDetails((current) => current || longCourseBlueprint.access_details)
+        }
         setLoading(false)
         return
       }
@@ -4028,6 +4417,11 @@ function AdminCourseEditor() {
         setWhoIsThisFor(courseData.who_is_this_for ?? '')
         setMaterialsNeeded(courseData.materials_needed ?? '')
         setAccessDetails(courseData.access_details ?? '')
+        setCourseStructureSummary(courseData.course_structure_summary ?? '')
+        setHowLearningWorks(courseData.how_learning_works ?? '')
+        setTimelineCommitment(courseData.timeline_commitment ?? '')
+        setInstructorTitle(courseData.instructor_title ?? '')
+        setInstructorBio(courseData.instructor_bio ?? '')
         setCourseType(courseData.course_type === 'long' ? 'long' : 'short')
       }
 
@@ -4036,7 +4430,7 @@ function AdminCourseEditor() {
     }
 
     loadCourseEditor()
-  }, [courseId, isCreateMode])
+  }, [courseId, isCreateMode, courseType])
 
   async function handleSave(e) {
     e.preventDefault()
@@ -4087,6 +4481,11 @@ function AdminCourseEditor() {
         materials_needed: materialsNeeded.trim() || null,
         access_details: accessDetails.trim() || null,
         session_count: sessionCountLabel ? parseInt(sessionCountLabel) : null,
+        course_structure_summary: courseStructureSummary.trim() || null,
+        how_learning_works: howLearningWorks.trim() || null,
+        timeline_commitment: timelineCommitment.trim() || null,
+        instructor_title: instructorTitle.trim() || null,
+        instructor_bio: instructorBio.trim() || null,
       }
       const { error: extendedError } = await saveExtendedCourseFields(data.id, extendedFields)
 
@@ -4208,6 +4607,8 @@ function AdminCourseEditor() {
     }
   }
 
+  const isLongCourseEditor = courseType === 'long'
+
   if (loading) {
     return <div className="py-16 text-center text-sm text-ink-muted">Loading course editor…</div>
   }
@@ -4230,22 +4631,32 @@ function AdminCourseEditor() {
             Back to courses
           </button>
           <h2 className="mt-2 font-display text-3xl font-semibold">{isCreateMode ? 'Create course' : course.title}</h2>
-          <p className="mt-1 text-sm text-ink-muted">{isCreateMode ? 'Set up the course shell first, then save it to unlock session editing.' : 'Edit course details, publishing state, and lesson URLs here.'}</p>
+          <p className="mt-1 text-sm text-ink-muted">
+            {isLongCourseEditor
+              ? 'Build the long-course detail page first. Modules and live sessions come next.'
+              : isCreateMode ? 'Set up the course shell first, then save it to unlock session editing.' : 'Edit course details, publishing state, and lesson URLs here.'}
+          </p>
         </div>
         <Badge variant={status === 'published' ? 'success' : status === 'coming_soon' ? 'accent' : 'default'}>
           {status === 'published' ? 'Live' : status === 'coming_soon' ? 'Coming Soon' : 'Draft'}
         </Badge>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[0.48fr_0.52fr]">
+      <div className={`grid gap-6 ${isLongCourseEditor ? 'xl:grid-cols-[0.58fr_0.42fr]' : 'xl:grid-cols-[0.48fr_0.52fr]'}`}>
         <AdminEditor title="Course details" action={saving ? 'Saving…' : 'Save changes'} onSubmit={handleSave}>
+          {isLongCourseEditor && (
+            <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
+              <p className="text-[12px] font-semibold uppercase tracking-[0.18em] text-primary">Student-facing page content</p>
+              <p className="mt-1 text-sm text-ink-muted">These fields map directly to the long-course detail page sections: hero, about, structure, learning method, timeline, instructor, and FAQs.</p>
+            </div>
+          )}
           <div className="grid gap-4 md:grid-cols-2">
             <Input label="Course title" value={title} onChange={(e) => setTitle(e.target.value)} required />
             <Input label="Price (rupees)" type="number" value={price} onChange={(e) => setPrice(e.target.value)} />
           </div>
           <div className="grid gap-4 md:grid-cols-3">
             <Input label="Duration" value={durationLabel} onChange={(e) => setDurationLabel(e.target.value)} />
-            <Input label="Number of sessions" type="number" min="0" value={sessionCountLabel} onChange={(e) => setSessionCountLabel(e.target.value)} />
+            <Input label={isLongCourseEditor ? 'Planned live sessions' : 'Number of sessions'} type="number" min="0" value={sessionCountLabel} onChange={(e) => setSessionCountLabel(e.target.value)} />
             <Input label="Level" value={level} onChange={(e) => setLevel(e.target.value)} />
           </div>
           <div className="grid gap-4 md:grid-cols-2">
@@ -4258,11 +4669,62 @@ function AdminCourseEditor() {
               </select>
             </label>
           </div>
+          {isLongCourseEditor && (
+            <div className="rounded-xl border border-border bg-surface-warm px-4 py-3">
+              <p className="text-[12px] font-semibold uppercase tracking-[0.18em] text-primary">Hero</p>
+              <p className="mt-1 text-sm text-ink-muted">The hero uses the title, price, duration, level, status, trailer URL, thumbnail, and long-course labels from this form.</p>
+            </div>
+          )}
           <label className="block">
-            <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-ink-muted">Description</span>
+            <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-ink-muted">{isLongCourseEditor ? 'About this course' : 'Description'}</span>
             <textarea className="min-h-32 w-full rounded-lg border border-border bg-surface px-4 py-3 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15" value={description} onChange={(e) => setDescription(e.target.value)} />
           </label>
           <Input label="Trailer URL" placeholder="YouTube, Vimeo, or direct video link" value={trailerUrl} onChange={(e) => setTrailerUrl(e.target.value)} />
+          {isLongCourseEditor && (
+            <>
+              <label className="block">
+                <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-ink-muted">Course structure section</span>
+                <textarea
+                  className="min-h-28 w-full rounded-lg border border-border bg-surface px-4 py-3 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
+                  placeholder="Explain the six-module live course structure. Module/session editing comes later."
+                  value={courseStructureSummary}
+                  onChange={(e) => setCourseStructureSummary(e.target.value)}
+                />
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-ink-muted">How learning works section</span>
+                <textarea
+                  className="min-h-32 w-full rounded-lg border border-border bg-surface px-4 py-3 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
+                  placeholder="Describe live classes, practice between sessions, recordings, feedback, and LMS access."
+                  value={howLearningWorks}
+                  onChange={(e) => setHowLearningWorks(e.target.value)}
+                />
+                <span className="mt-1 block text-xs text-ink-muted">Use short paragraphs. Each new paragraph appears as a separate learning point.</span>
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-ink-muted">Timeline and commitment section</span>
+                <textarea
+                  className="min-h-32 w-full rounded-lg border border-border bg-surface px-4 py-3 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
+                  placeholder="Set expectations for the two-year rhythm, sequence, practice load, and review cadence."
+                  value={timelineCommitment}
+                  onChange={(e) => setTimelineCommitment(e.target.value)}
+                />
+              </label>
+              <div className="grid gap-4 md:grid-cols-2">
+                <Input label="Instructor title" value={instructorTitle} onChange={(e) => setInstructorTitle(e.target.value)} />
+                <Input label="Instructor name shown" value="Drdha Vrata Gorrick" disabled />
+              </div>
+              <label className="block">
+                <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-ink-muted">Meet your instructor section</span>
+                <textarea
+                  className="min-h-28 w-full rounded-lg border border-border bg-surface px-4 py-3 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
+                  placeholder="Instructor bio shown on the course detail page."
+                  value={instructorBio}
+                  onChange={(e) => setInstructorBio(e.target.value)}
+                />
+              </label>
+            </>
+          )}
           <label className="block">
             <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-ink-muted">Who is this course for?</span>
             <textarea className="min-h-24 w-full rounded-lg border border-border bg-surface px-4 py-3 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15" value={whoIsThisFor} onChange={(e) => setWhoIsThisFor(e.target.value)} />
@@ -4282,6 +4744,21 @@ function AdminCourseEditor() {
           {formError && <p className="text-sm text-error">{formError}</p>}
         </AdminEditor>
 
+        {isLongCourseEditor ? (
+          <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
+            <div>
+              <p className="text-[12px] font-semibold uppercase tracking-[0.18em] text-primary">Next step</p>
+              <h2 className="mt-2 font-display text-2xl font-semibold">Modules and live sessions</h2>
+              <p className="mt-2 text-sm leading-7 text-ink-muted">
+                This long-course editor now captures the student-facing course detail page. The module builder and live-session builder will be added next, with each session belonging to a module and carrying live class, recording, reference, and resource fields.
+              </p>
+            </div>
+            <div className="mt-5 rounded-xl border border-dashed border-border bg-surface-warm p-5">
+              <p className="font-display text-lg font-semibold">Not wired yet.</p>
+              <p className="mt-1 text-sm text-ink-muted">For now, save the long course details first. We will build module/session creation separately.</p>
+            </div>
+          </section>
+        ) : (
         <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
           <div className="mb-5 flex items-center justify-between gap-3">
             <div>
@@ -4345,6 +4822,7 @@ function AdminCourseEditor() {
             )}
           </div>
         </section>
+        )}
       </div>
     </div>
   )
