@@ -827,7 +827,7 @@ function Auth() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  // Password fallback (sign-in only)
+  // Password: used for sign-up (required) and sign-in fallback toggle
   const [usePassword, setUsePassword] = useState(false)
   const [password, setPassword] = useState('')
 
@@ -835,26 +835,50 @@ function Auth() {
     if (session) navigate('/learning', { replace: true })
   }, [session])
 
+  // ── Sign-up: password-based, no OTP ──
+  async function handleSignUp(e) {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+    const name = `${firstName} ${lastName}`.trim()
+
+    const { data, error: signUpError } = await supabase.auth.signUp({ email, password })
+    if (signUpError) {
+      setError(signUpError.message)
+      setLoading(false)
+      return
+    }
+
+    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password })
+    if (signInError) {
+      setError(signInError.message)
+      setLoading(false)
+      return
+    }
+
+    const userId = signInData.user?.id ?? data.user?.id
+    if (userId) {
+      await supabase.from('profiles').upsert({
+        id: userId,
+        email,
+        name: name || email.split('@')[0],
+        country,
+        phone: phone.trim() || null,
+        role: 'student',
+        admission_status: 'prospect',
+        fee_status: 'pending',
+      })
+    }
+
+    navigate('/onboarding', { replace: true })
+    setLoading(false)
+  }
+
+  // ── Sign-in: OTP magic link ──
   async function handleSendOtp(e) {
     e.preventDefault()
     setLoading(true)
     setError('')
-
-    if (isSignUp) {
-      const name = `${firstName} ${lastName}`.trim()
-      const { error: signUpError } = await supabase.auth.signUp({
-        email,
-        password: Math.random().toString(36),
-        options: { data: name ? { name } : undefined },
-      })
-      // "already registered" is fine — fall through to OTP sign-in
-      if (signUpError && !signUpError.message.toLowerCase().includes('already registered')) {
-        setError(signUpError.message)
-        setLoading(false)
-        return
-      }
-    }
-
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: { emailRedirectTo: 'https://divyakala-lms.vercel.app/auth/callback' },
@@ -869,19 +893,8 @@ function Auth() {
     if (otp.replace(/\s/g, '').length < 6) return
     setLoading(true)
     setError('')
-    const { data, error } = await supabase.auth.verifyOtp({ email, token: otp, type: 'email' })
+    const { error } = await supabase.auth.verifyOtp({ email, token: otp, type: 'email' })
     if (error) setError(error.message)
-    else if (isSignUp && data.user) {
-      const name = `${firstName} ${lastName}`.trim()
-      await supabase.from('profiles').upsert({
-        id: data.user.id,
-        email,
-        name: name || email.split('@')[0],
-        country,
-        phone: phone.trim() || null,
-        role: 'student',
-      })
-    }
     // On success: onAuthStateChange fires → AuthProvider sets session → useEffect above navigates
     setLoading(false)
   }
@@ -909,7 +922,7 @@ function Auth() {
 
           {/* ── Sign-up form ── */}
           {isSignUp && (
-            <form onSubmit={handleSendOtp} className="mt-8 space-y-5 rounded-2xl border border-border bg-surface p-8 text-left shadow-md">
+            <form onSubmit={handleSignUp} className="mt-8 space-y-5 rounded-2xl border border-border bg-surface p-8 text-left shadow-md">
               <div className="grid grid-cols-2 gap-4">
                 <Input label="First name" value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
                 <Input label="Last name" value={lastName} onChange={(e) => setLastName(e.target.value)} />
@@ -929,8 +942,9 @@ function Auth() {
                 <Input label="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+91 98765 43210" />
               </div>
               <Input label="Email" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
+              <Input label="Password" type="password" placeholder="Create a password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} />
               {error && <p className="text-sm text-error">{error}</p>}
-              <Button className="w-full" disabled={loading}>{loading ? 'Sending…' : 'Create Account'}</Button>
+              <Button className="w-full" disabled={loading}>{loading ? 'Creating account…' : 'Create Account'}</Button>
             </form>
           )}
 
