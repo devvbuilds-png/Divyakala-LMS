@@ -2,7 +2,7 @@
 
 This file is the living memory for the Divyakala LMS project. Every Claude Code session and every future Claude conversation should read this first. Update it after every major decision or build session.
 
-Last updated: May 17, 2026 (session 25 — auth fixed, onboarding, admin CRM, mock students seeded)
+Last updated: May 17, 2026 (Codex handoff continuation — long-course detail + admin module planner)
 
 ---
 
@@ -43,6 +43,7 @@ Key files:
 - `tailwind.config.js` — Divyakala color tokens
 - `public/art/` — Drdha's artwork assets (webp)
 - `public/logo.webp` — Divyakala wordmark
+- `supabase-long-course-detail-fields.sql` — SQL for long-course detail/module planner columns on `courses`
 - `.env.local.txt` — local only, gitignored, holds SUPABASE_SERVICE_ROLE_KEY for admin scripts
 - `seed-users.js` — local only, gitignored, one-time seed script for mock students
 
@@ -125,6 +126,136 @@ Ordered collections of courses. For learning paths, cohorts, themed journeys.
 5. Publish the course → appears in student Browse
 
 ⏳ DEFERRED to v2 — Option B (drag-and-drop card library where admin drags cards into session columns, roles auto-assigned by card type). More visual, better UX. Build post-contract.
+
+---
+
+## Long Courses — Current Demo Implementation
+
+Long courses are now distinct from short courses through `courses.course_type`.
+
+Course type rules:
+- Short course = `course_type` missing/null or `short`
+- Long course = `course_type = 'long'`
+- Browse, My Learning, and Admin Courses use `Short courses | Long courses` pills
+- Default active tab everywhere is `Short courses`
+
+### Long-course student detail page
+
+Long courses render through a separate long-course detail layout inside `CourseDetail`, while keeping the same compact warm UI language as short courses:
+- Warm hero band with title, instructor, price, trailer, thumbnail, duration/module/session/level pills, and CTAs
+- About this course
+- Course structure
+- How learning works
+- Timeline and commitment
+- Meet your instructor
+- Frequently asked questions
+- Sticky right-side summary card on desktop
+
+Important behavior:
+- Real DB long courses must not merge in demo fallback text. The page renders saved course fields only, except hardcoded instructor/live-recording framing.
+- If a real long course has no module JSON, Course structure shows a graceful "No modules added yet" state.
+- The static demo fallback route `/courses/divyakala-long-course` still exists for the hardcoded blueprint only.
+
+### Long-course admin detail form
+
+When creating/editing with `course_type = long` or `/admin/courses/new?type=long`, the admin editor switches from the short-course session-upload flow to a long-course course-detail form.
+
+Fields captured for long courses:
+- Course title
+- Price
+- Duration
+- Modules count
+- Planned live sessions count
+- Level
+- Status: draft / coming soon / published
+- About this course
+- Trailer URL
+- Course structure section copy
+- How learning works section copy
+- Timeline and commitment section copy
+- FAQ fields: who is this for, materials needed, access duration
+- Thumbnail image
+
+Removed from editable long-course form:
+- Meet your instructor. This remains hardcoded on the student detail page, matching short-course behavior.
+
+### Long-course module/session planner
+
+The right side of the long-course admin editor now has an editable module planner. It is not locked behind saving; admin can edit it during course creation.
+
+Each module supports:
+- Module title
+- Module description
+- Potential live sessions count
+- Optional planned live session names
+- Add/remove session
+- Add/remove module
+
+Scope intentionally limited:
+- No Zoom/live URL yet
+- No recording URL yet
+- No session dates/status yet
+- No references/resources yet
+- Those will be added in the next iteration after this structure is stable.
+
+Persistence:
+- Stored on `courses.long_course_structure` as JSONB:
+
+```json
+{
+  "modules": [
+    {
+      "title": "Module 1 - ...",
+      "description": "...",
+      "planned_sessions": 6,
+      "sessions": [{ "title": "..." }]
+    }
+  ]
+}
+```
+
+### Supabase columns for long courses
+
+Run `supabase-long-course-detail-fields.sql` in Supabase SQL Editor if any long-course form/module data does not persist.
+
+Required columns currently:
+
+```sql
+alter table public.courses
+  add column if not exists module_count integer,
+  add column if not exists course_structure_summary text,
+  add column if not exists how_learning_works text,
+  add column if not exists timeline_commitment text,
+  add column if not exists long_course_structure jsonb;
+```
+
+Notes:
+- Vercel deploys code only; it does not apply Supabase schema changes.
+- The code retries around missing optional columns and shows an inline warning naming fields that could not persist.
+- If modules do not appear on the student page after admin save, check that `long_course_structure` exists.
+
+### Seeded long-course demo data
+
+The live Supabase course `Drawing Divine Forms - The Two-Year Path` has been filled with real demo content:
+- Course ID: `aa01a000-0d7e-4aab-a45c-916af6b37e23`
+- `course_type = long`
+- `status = published`
+- `duration_label = 2 years`
+- `module_count = 6`
+- `session_count = 36`
+- `level = Foundational to advanced guided study`
+- Full About / structure / learning / timeline / FAQ copy saved
+- `long_course_structure` seeded with 6 modules and 36 planned live session names
+
+Seeded modules:
+1. Foundations of Sacred Drawing
+2. Talamana and Divine Proportion
+3. Iconographic Language and Symbol
+4. Composition, Narrative, and Temple Aesthetics
+5. Color, Surface, and Devotional Finish
+6. Personal Sadhana Project
+
+The student detail page should now show these under **Course structure** for the Two-Year Path course.
 
 ---
 
@@ -739,6 +870,12 @@ ALTER TABLE profiles ADD COLUMN IF NOT EXISTS created_at timestamptz DEFAULT now
   - `who_is_this_for`
   - `materials_needed`
   - `access_details`
+  - `course_type`
+  - `module_count`
+  - `course_structure_summary`
+  - `how_learning_works`
+  - `timeline_commitment`
+  - `long_course_structure`
 - Course create/update now saves base fields first, then attempts the extra detail fields in a second pass so course creation does not completely fail if those newer columns have not been added yet
 - SQL already needs to be run in Supabase for the columns above if they are not present. Without them, the course shell still creates, but those extended detail values will not persist.
 - Keep Poppins font everywhere. Do not introduce other typefaces.
@@ -751,42 +888,48 @@ ALTER TABLE profiles ADD COLUMN IF NOT EXISTS created_at timestamptz DEFAULT now
 
 ---
 
-## Next Session — Long Courses + Batches
+## Next Session — Long Course Live Session Details
 
-### What to build
-1. **Long course type** — distinct from short courses. New `course_type` column on `courses` table: `short` (default) or `long`.
-2. **Browse page** — shows both short and long course cards. Long course cards display a "Request Batch Placement" CTA instead of "Enroll Now".
-3. **Batch interest capture** — clicking "Request Batch Placement" records the student's interest in `profiles.payment_notes` (or a new `batch_interest` column) and shows a confirmation message.
-4. **Admin batch creation** — admin can create batches tied to a long course: batch name, start date, capacity, schedule description.
-5. **Student enrollment into batches** — admin manually enrolls students into a batch from the CRM detail panel.
-6. **CRM detail panel extension** — show enrolled short courses (from `enrollments`) and long course batch interest/enrollment in the same panel.
+Long-course detail and module/session planning are now working. The next iteration should add the actual live-session detail fields under each planned session.
 
-### Database additions needed (next session)
-```sql
--- Add course type
-ALTER TABLE courses ADD COLUMN IF NOT EXISTS course_type text DEFAULT 'short';
+### What to build next
+1. Extend each planned long-course session with:
+   - Live class URL (Zoom/Meet/etc.; for demo any URL is fine)
+   - Recording URL (Bunny later; YouTube is fine for demo)
+   - Reference upload or URL
+   - Resource upload or URL
+   - Optional session description
+2. Decide whether session status is manual for demo:
+   - `upcoming`
+   - `concluded`
+   - `recording_available`
+3. Student-facing detail page should **not** show status labels yet unless explicitly requested. It should continue showing only modules and session names on the public detail page.
+4. A future enrolled-student long-course learning screen can show Join Live / Watch Recording / Resources by session.
 
--- Batches table
-CREATE TABLE IF NOT EXISTS batches (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  course_id uuid REFERENCES courses(id) ON DELETE CASCADE,
-  name text NOT NULL,
-  starts_at date,
-  capacity int,
-  schedule_description text,
-  status text DEFAULT 'upcoming',
-  created_at timestamptz DEFAULT now()
-);
+### Suggested storage model for next iteration
+Stay inside `courses.long_course_structure` JSONB for now:
 
--- Batch enrollments
-CREATE TABLE IF NOT EXISTS batch_enrollments (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  batch_id uuid REFERENCES batches(id) ON DELETE CASCADE,
-  user_id uuid REFERENCES profiles(id),
-  enrolled_at timestamptz DEFAULT now(),
-  status text DEFAULT 'active'
-);
+```json
+{
+  "modules": [
+    {
+      "title": "Module 1",
+      "description": "...",
+      "planned_sessions": 6,
+      "sessions": [
+        {
+          "title": "Session title",
+          "description": "...",
+          "live_url": "https://...",
+          "recording_url": "https://...",
+          "reference_url": "https://...",
+          "resource_url": "https://...",
+          "status": "upcoming"
+        }
+      ]
+    }
+  ]
+}
 ```
 
-### Reference implementation
-The `codex/current-demo-source` branch has a reference implementation of batches (`StudentBatchDashboard`, `term_groups`, `batch_sessions`, `term_modules` tables). Read it for UI patterns but do NOT copy the schema directly — the tables above are the simplified version for this build.
+Do not create batches yet unless the user explicitly switches to batch management. Batch/term group management is still a later step.
