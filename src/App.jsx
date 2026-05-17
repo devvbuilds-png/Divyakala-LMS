@@ -88,7 +88,7 @@ const courses = [
 const longCourseBlueprint = {
   id: 'divyakala-long-course',
   course_type: 'long',
-  title: 'Divyakala Two-Year Sacred Art Program',
+  title: 'Drawing Divine Forms - The Two-Year Path',
   instructor: 'Drdha Vrata Gorrick',
   price: 'Enrollment by request',
   duration_label: '2 years',
@@ -2157,13 +2157,19 @@ function LongCourseDetail({
     .filter(Boolean)
   const timelineCommitment = displayCourse.timeline_commitment ?? longCourseBlueprint.timeline_commitment
   const moduleCount = displayCourse.module_count || modules.length
+  const durationLabel = displayCourse.duration_label ?? longCourseBlueprint.duration_label
+  const levelLabel = displayCourse.level ?? longCourseBlueprint.level
+  const plannedSessionCount = sessionCount || displayCourse.session_count || totalSessions
+  const liveFormatLabel = 'Live sessions + recordings'
+  const enrollmentLabel = 'By request'
 
   const courseFacts = [
-    { label: 'Duration', value: '2 years' },
+    { label: 'Duration', value: durationLabel },
     { label: 'Modules', value: `${moduleCount} modules` },
-    { label: 'Sessions', value: `${sessionCount || totalSessions} live sessions` },
-    { label: 'Format', value: 'Live + recordings' },
-    { label: 'Enrollment', value: 'By request' },
+    { label: 'Sessions', value: plannedSessionCount ? `${plannedSessionCount} planned live sessions` : 'Live sessions' },
+    { label: 'Level', value: levelLabel },
+    { label: 'Format', value: liveFormatLabel },
+    { label: 'Enrollment', value: enrollmentLabel },
   ]
 
   return (
@@ -2171,15 +2177,16 @@ function LongCourseDetail({
       <section className="-mx-4 -mt-5 bg-[#ede3c6] px-4 py-8 sm:-mx-5 sm:px-5 lg:-mx-5 lg:px-5 lg:py-10">
         <div className="grid gap-7 lg:grid-cols-[1fr_0.85fr] lg:items-center">
           <div>
-            <p className={eyebrow}>Long course - two-year live program</p>
+            <p className={eyebrow}>Long course - {durationLabel} live program</p>
             <h1 className="mt-3 max-w-2xl font-display text-[1.9rem] font-semibold leading-[1.2] text-[#1a1208] sm:text-[2.25rem]">
               {displayCourse.title}
             </h1>
             <p className="mt-2.5 text-[15px] text-[#7a6040]">By {instructorName}</p>
             <div className="mt-4 flex flex-wrap gap-2">
-              <span className={pill}>2 years</span>
+              <span className={pill}>{durationLabel}</span>
               <span className={pill}>{moduleCount} modules</span>
-              <span className={pill}>Live sessions</span>
+              {plannedSessionCount ? <span className={pill}>{plannedSessionCount} planned live sessions</span> : <span className={pill}>Live sessions</span>}
+              {levelLabel && <span className={pill}>{levelLabel}</span>}
               <span className={pill}>Recordings after class</span>
             </div>
             <div className="mt-6 flex flex-wrap items-center gap-3">
@@ -2202,9 +2209,10 @@ function LongCourseDetail({
           <section className="pb-8">
             <p className={eyebrow}>Overview</p>
             <h2 className={sectionHeading}>About this course</h2>
-            <p className="mt-4 text-[14px] leading-[1.9] text-[#7a6040]">{displayCourse.description}</p>
+            <p className="mt-4 text-[14px] leading-[1.9] text-[#7a6040]">{displayCourse.description ?? longCourseBlueprint.description}</p>
             <div className="mt-5 flex flex-wrap gap-2">
               <span className="rounded-full border border-[#ddc990] bg-[#f5ead8] px-3 py-1 text-[12px] font-semibold text-[#7a6040]">{moduleCount}-module guided path</span>
+              {plannedSessionCount ? <span className="rounded-full border border-[#ddc990] bg-[#f5ead8] px-3 py-1 text-[12px] font-semibold text-[#7a6040]">{plannedSessionCount} planned live sessions</span> : null}
               <span className="rounded-full border border-[#ddc990] bg-[#f5ead8] px-3 py-1 text-[12px] font-semibold text-[#7a6040]">Live teaching with Drdha</span>
               <span className="rounded-full border border-[#b8d4a8] bg-[#eef5eb] px-3 py-1 text-[12px] font-semibold text-[#5c8a4f]">Concluded sessions become recordings</span>
             </div>
@@ -2291,9 +2299,9 @@ function LongCourseDetail({
                 {timelineCommitment}
               </p>
               <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                <div><p className={eyebrow}>Length</p><p className="mt-1 font-semibold text-[#1a1208]">2 years</p></div>
+                <div><p className={eyebrow}>Length</p><p className="mt-1 font-semibold text-[#1a1208]">{durationLabel}</p></div>
                 <div><p className={eyebrow}>Path</p><p className="mt-1 font-semibold text-[#1a1208]">{moduleCount} sequential modules</p></div>
-                <div><p className={eyebrow}>Access</p><p className="mt-1 font-semibold text-[#1a1208]">Live sessions + LMS recordings</p></div>
+                <div><p className={eyebrow}>Access</p><p className="mt-1 font-semibold text-[#1a1208]">{liveFormatLabel}</p></div>
               </div>
             </div>
           </section>
