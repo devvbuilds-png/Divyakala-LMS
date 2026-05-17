@@ -1993,7 +1993,7 @@ function CourseDetail() {
         user_id: session.user.id,
         course_id: displayCourse.id,
         progress: 0,
-        last_session_id: firstSession?.id ?? null,
+        last_session_id: isLongCourse ? null : firstSession?.id ?? null,
         status: isLongCourse ? 'pending' : 'active',
       })
       .select()
@@ -2885,6 +2885,7 @@ function LessonPlayer() {
   }, [activeSession, session?.user?.id])
 
   const displayCourse = course ?? fallbackCourse
+  const isLongCourse = displayCourse.course_type === 'long'
   const activeIndex = courseSessions.findIndex((session) => session.id === activeSession)
   const currentSession = currentSessionData ?? courseSessions[activeIndex] ?? courseSessions[0] ?? null
   const currentSessionNumber = currentSession?.position ?? (activeIndex >= 0 ? activeIndex + 1 : 1)
@@ -2932,7 +2933,7 @@ function LessonPlayer() {
       }
       const payload = {
         progress: nextProgress,
-        last_session_id: nextSession?.id ?? currentSession.id,
+        last_session_id: isLongCourse ? null : nextSession?.id ?? currentSession.id,
         status: nextProgress >= 100 ? 'completed' : 'active',
         completed_at: nextProgress >= 100 ? new Date().toISOString() : null,
       }
