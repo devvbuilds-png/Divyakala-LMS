@@ -426,6 +426,8 @@ function App() {
       <Routes>
         <Route path="/" element={<RootRedirect />} />
         <Route path="/auth/:mode" element={<Auth />} />
+        <Route path="/auth/callback" element={<AuthCallback />} />
+        <Route path="/onboarding" element={<Protected><StudentOnboarding /></Protected>} />
         <Route path="/admin/auth" element={<AdminAuth />} />
         <Route path="/admin/*" element={<AdminProtected><AdminShell /></AdminProtected>} />
         <Route element={<Protected><Shell /></Protected>}>
@@ -466,11 +468,17 @@ function LoadingScreen() {
   )
 }
 
+function isProfileComplete(profile) {
+  if (!profile) return false
+  return !!(profile.country && profile.phone && profile.age_group && profile.artist_background && profile.why_shilpa_shastra)
+}
+
 function RootRedirect() {
   const { session, profile, loading } = useAuth()
   if (loading) return <LoadingScreen />
   if (!session) return <Navigate to="/auth/sign-in" />
   if (profile?.role === 'admin') return <Navigate to="/admin" />
+  if (profile && !isProfileComplete(profile)) return <Navigate to="/onboarding" />
   return <Navigate to="/learning" />
 }
 
@@ -819,6 +827,10 @@ function Auth() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  // Password fallback (sign-in only)
+  const [usePassword, setUsePassword] = useState(false)
+  const [password, setPassword] = useState('')
+
   useEffect(() => {
     if (session) navigate('/learning', { replace: true })
   }, [session])
@@ -843,7 +855,10 @@ function Auth() {
       }
     }
 
-    const { error } = await supabase.auth.signInWithOtp({ email })
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: 'https://divyakala-lms.vercel.app/auth/callback' },
+    })
     if (error) setError(error.message)
     else setOtpSent(true)
     setLoading(false)
@@ -871,6 +886,15 @@ function Auth() {
     setLoading(false)
   }
 
+  async function handlePasswordSignIn(e) {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error) setError('No account found or wrong password. Please sign up first.')
+    setLoading(false)
+  }
+
   return (
     <div className="grid min-h-screen bg-bg lg:grid-cols-2">
       <div className="relative min-h-[36vh] overflow-hidden lg:min-h-screen">
@@ -882,41 +906,217 @@ function Auth() {
           <img src={logo} alt="Divyakala" className="mx-auto mb-8 max-h-20 object-contain" />
           <h1 className="font-display text-4xl font-medium">Namaskaram! Welcome to Divyakala.</h1>
           <p className="mt-3 text-lg text-ink-muted">{isSignUp ? 'Create your practice space.' : 'Sign in to continue your practice.'}</p>
-          {!otpSent ? (
+
+          {/* ── Sign-up form ── */}
+          {isSignUp && (
             <form onSubmit={handleSendOtp} className="mt-8 space-y-5 rounded-2xl border border-border bg-surface p-8 text-left shadow-md">
-              {isSignUp && <div className="grid grid-cols-2 gap-4"><Input label="First name" value={firstName} onChange={(e) => setFirstName(e.target.value)} required /><Input label="Last name" value={lastName} onChange={(e) => setLastName(e.target.value)} /></div>}
-              {isSignUp && (
-                <div className="grid grid-cols-2 gap-4">
-                  <label className="block">
-                    <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-ink-muted">Country</span>
-                    <select value={country} onChange={(e) => setCountry(e.target.value)} className="w-full rounded-lg border border-border bg-surface px-4 py-3 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15">
-                      <option>India</option>
-                      <option>United States</option>
-                      <option>United Kingdom</option>
-                      <option>Canada</option>
-                      <option>Australia</option>
-                      <option>Other</option>
-                    </select>
-                  </label>
-                  <Input label="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+91 98765 43210" />
-                </div>
-              )}
+              <div className="grid grid-cols-2 gap-4">
+                <Input label="First name" value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
+                <Input label="Last name" value={lastName} onChange={(e) => setLastName(e.target.value)} />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <label className="block">
+                  <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-ink-muted">Country</span>
+                  <select value={country} onChange={(e) => setCountry(e.target.value)} className="w-full rounded-lg border border-border bg-surface px-4 py-3 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15">
+                    <option>India</option>
+                    <option>United States</option>
+                    <option>United Kingdom</option>
+                    <option>Canada</option>
+                    <option>Australia</option>
+                    <option>Other</option>
+                  </select>
+                </label>
+                <Input label="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+91 98765 43210" />
+              </div>
               <Input label="Email" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
               {error && <p className="text-sm text-error">{error}</p>}
-              <Button className="w-full" disabled={loading}>{loading ? 'Sending…' : isSignUp ? 'Create Account' : 'Continue'}</Button>
-            </form>
-          ) : (
-            <form onSubmit={handleVerifyOtp} className="mt-8 space-y-5 rounded-2xl border border-border bg-surface p-8 text-left shadow-md">
-              <p className="text-sm text-ink-muted">A 6-digit code was sent to <strong>{email}</strong></p>
-              <OtpBoxes value={otp} onChange={setOtp} />
-              {error && <p className="text-sm text-error">{error}</p>}
-              <Button className="w-full" disabled={loading}>{loading ? 'Verifying…' : 'Sign In'}</Button>
-              <button type="button" className="w-full text-center text-sm text-primary" onClick={() => { setOtpSent(false); setError('') }}>Use a different email</button>
+              <Button className="w-full" disabled={loading}>{loading ? 'Sending…' : 'Create Account'}</Button>
             </form>
           )}
+
+          {/* ── Sign-in: OTP flow ── */}
+          {!isSignUp && !usePassword && (
+            <>
+              {!otpSent ? (
+                <form onSubmit={handleSendOtp} className="mt-8 space-y-5 rounded-2xl border border-border bg-surface p-8 text-left shadow-md">
+                  <Input label="Email" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                  {error && <p className="text-sm text-error">{error}</p>}
+                  <Button className="w-full" disabled={loading}>{loading ? 'Sending…' : 'Continue'}</Button>
+                </form>
+              ) : (
+                <form onSubmit={handleVerifyOtp} className="mt-8 space-y-5 rounded-2xl border border-border bg-surface p-8 text-left shadow-md">
+                  <p className="text-sm text-ink-muted">A 6-digit code was sent to <strong>{email}</strong></p>
+                  <OtpBoxes value={otp} onChange={setOtp} />
+                  {error && <p className="text-sm text-error">{error}</p>}
+                  <Button className="w-full" disabled={loading}>{loading ? 'Verifying…' : 'Sign In'}</Button>
+                  <button type="button" className="w-full text-center text-sm text-primary" onClick={() => { setOtpSent(false); setError('') }}>Use a different email</button>
+                </form>
+              )}
+              <button
+                type="button"
+                className="mt-4 text-sm text-ink-muted underline underline-offset-2 hover:text-primary"
+                onClick={() => { setUsePassword(true); setOtpSent(false); setError('') }}
+              >
+                Sign in with password instead
+              </button>
+            </>
+          )}
+
+          {/* ── Sign-in: Password fallback ── */}
+          {!isSignUp && usePassword && (
+            <>
+              <form onSubmit={handlePasswordSignIn} className="mt-8 space-y-5 rounded-2xl border border-border bg-surface p-8 text-left shadow-md">
+                <Input label="Email" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                <Input label="Password" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                {error && <p className="text-sm text-error">{error}</p>}
+                <Button className="w-full" disabled={loading}>{loading ? 'Signing in…' : 'Sign In'}</Button>
+              </form>
+              <button
+                type="button"
+                className="mt-4 text-sm text-ink-muted underline underline-offset-2 hover:text-primary"
+                onClick={() => { setUsePassword(false); setError('') }}
+              >
+                Use magic link instead
+              </button>
+            </>
+          )}
+
           <Link className="mt-5 inline-block text-sm font-semibold text-primary" to={isSignUp ? '/auth/sign-in' : '/auth/sign-up'}>
             {isSignUp ? 'Already a member? Sign in' : 'New here? Register'}
           </Link>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function AuthCallback() {
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    supabase.auth.getSession().then(() => {
+      navigate('/', { replace: true })
+    })
+  }, [])
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-bg">
+      <p className="text-ink-muted">Signing you in…</p>
+    </div>
+  )
+}
+
+function StudentOnboarding() {
+  const navigate = useNavigate()
+  const { session, profile, refreshProfile } = useAuth()
+
+  const [country, setCountry] = useState(profile?.country ?? '')
+  const [phone, setPhone] = useState(profile?.phone ?? '')
+  const [ageGroup, setAgeGroup] = useState(profile?.age_group ?? '')
+  const [artistBackground, setArtistBackground] = useState(profile?.artist_background ?? '')
+  const [whyShilpa, setWhyShilpa] = useState(profile?.why_shilpa_shastra ?? '')
+  const [portfolioUrl, setPortfolioUrl] = useState(profile?.portfolio_url ?? '')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  const needsCountry = !profile?.country
+  const needsPhone = !profile?.phone
+
+  async function handleSave(e) {
+    e.preventDefault()
+    if (!ageGroup || !artistBackground.trim() || !whyShilpa.trim()) {
+      setError('Please fill in all required fields.')
+      return
+    }
+    setSaving(true)
+    setError('')
+    const { error: saveError } = await supabase.from('profiles').upsert({
+      id: session.user.id,
+      ...(needsCountry && country ? { country } : {}),
+      ...(needsPhone && phone.trim() ? { phone: phone.trim() } : {}),
+      age_group: ageGroup,
+      artist_background: artistBackground.trim(),
+      why_shilpa_shastra: whyShilpa.trim(),
+      portfolio_url: portfolioUrl.trim() || null,
+    })
+    if (saveError) {
+      setError(saveError.message)
+      setSaving(false)
+      return
+    }
+    await refreshProfile(session.user.id)
+    navigate('/learning', { replace: true })
+  }
+
+  return (
+    <div className="grid min-h-screen bg-bg lg:grid-cols-2">
+      <div className="relative min-h-[36vh] overflow-hidden lg:min-h-screen">
+        <ArtPanel label={art.srinivasa} className="h-full rounded-none" />
+        <div className="absolute inset-0 bg-gradient-to-t from-ink/40 to-transparent" />
+        <div className="absolute bottom-8 left-8 right-8 text-white">
+          <p className="font-display text-2xl font-medium leading-snug">"Every careful mark counts."</p>
+          <p className="mt-2 text-sm opacity-70">— Drdha Vrata Gorrick</p>
+        </div>
+      </div>
+      <div className="flex items-center justify-center px-6 py-12">
+        <div className="w-full max-w-[480px]">
+          <img src={logo} alt="Divyakala" className="mb-8 max-h-16 object-contain" />
+          <h1 className="font-display text-3xl font-medium">Tell us about your practice</h1>
+          <p className="mt-2 text-sm text-ink-muted">This helps Drdha understand where you are and give you better feedback.</p>
+
+          <form onSubmit={handleSave} className="mt-7 space-y-5">
+            {needsCountry && (
+              <label className="block">
+                <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-ink-muted">Country <span className="text-error">*</span></span>
+                <select value={country} onChange={(e) => setCountry(e.target.value)} required className="w-full rounded-lg border border-border bg-surface px-4 py-3 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15">
+                  <option value="">Select country…</option>
+                  <option>India</option>
+                  <option>United States</option>
+                  <option>United Kingdom</option>
+                  <option>Canada</option>
+                  <option>Australia</option>
+                  <option>Other</option>
+                </select>
+              </label>
+            )}
+            {needsPhone && (
+              <Input label="Phone / WhatsApp *" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+91 98765 43210" />
+            )}
+            <label className="block">
+              <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-ink-muted">Age group <span className="text-error">*</span></span>
+              <select value={ageGroup} onChange={(e) => setAgeGroup(e.target.value)} required className="w-full rounded-lg border border-border bg-surface px-4 py-3 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15">
+                <option value="">Select…</option>
+                <option value="Under 19">Under 19</option>
+                <option value="19–30">19–30</option>
+                <option value="Above 30">Above 30</option>
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-ink-muted">Your art background <span className="text-error">*</span></span>
+              <textarea
+                rows={3}
+                value={artistBackground}
+                onChange={(e) => setArtistBackground(e.target.value)}
+                placeholder="Tell us about your art background…"
+                required
+                className="w-full rounded-lg border border-border bg-surface px-4 py-3 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15 resize-none"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-ink-muted">Why Shilpa Shastra? <span className="text-error">*</span></span>
+              <textarea
+                rows={3}
+                value={whyShilpa}
+                onChange={(e) => setWhyShilpa(e.target.value)}
+                placeholder="Why are you drawn to Shilpa Shastra?"
+                required
+                className="w-full rounded-lg border border-border bg-surface px-4 py-3 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15 resize-none"
+              />
+            </label>
+            <Input label="Portfolio URL (optional)" value={portfolioUrl} onChange={(e) => setPortfolioUrl(e.target.value)} placeholder="https://…" type="url" />
+            {error && <p className="rounded-lg border border-error/20 bg-error/5 p-3 text-sm text-error">{error}</p>}
+            <Button className="w-full" disabled={saving}>{saving ? 'Saving…' : 'Enter the studio →'}</Button>
+          </form>
         </div>
       </div>
     </div>
@@ -2994,7 +3194,7 @@ function AdminShell() {
             <Route path="courses/:courseId" element={<AdminCourseEditor />} />
             <Route path="playlists" element={<AdminPlaylists />} />
             <Route path="assignments" element={<AdminAssignments />} />
-            <Route path="students" element={<AdminStudents />} />
+            <Route path="students" element={<AdminStudentsCRM />} />
             <Route path="workshops" element={<AdminWorkshops />} />
             <Route path="settings" element={<AdminSettings />} />
           </Routes>
@@ -4523,161 +4723,262 @@ function VoiceRecorder({ previewUrl, onRecorded, onClear }) {
   )
 }
 
-function AdminStudents() {
+// Kept for backward compat — AdminStudentsCRM is the live component
+function AdminStudents() { return <AdminStudentsCRM /> }
+
+function AdminStudentsCRM() {
   const [students, setStudents] = useState([])
-  const [selectedStudentId, setSelectedStudentId] = useState(null)
-  const [loadingStudents, setLoadingStudents] = useState(true)
-  const [studentError, setStudentError] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [selectedId, setSelectedId] = useState(null)
+
+  // Detail panel edit state
+  const [detailAdmission, setDetailAdmission] = useState('')
+  const [detailFee, setDetailFee] = useState('')
+  const [detailNotes, setDetailNotes] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [saveMsg, setSaveMsg] = useState('')
 
   useEffect(() => {
     async function loadStudents() {
-      setLoadingStudents(true)
-      setStudentError('')
-
-      const { data: enrollmentRows, error } = await supabase
-        .from('enrollments')
+      setLoading(true)
+      setLoadError('')
+      const { data, error } = await supabase
+        .from('profiles')
         .select('*')
-        .order('enrolled_at', { ascending: false })
-
-      if (error) {
-        setStudentError(error.message)
-        setStudents([])
-        setLoadingStudents(false)
-        return
-      }
-
-      const enrollments = enrollmentRows ?? []
-      const userIds = [...new Set(enrollments.map((item) => item.user_id).filter(Boolean))]
-      const courseIds = [...new Set(enrollments.map((item) => item.course_id).filter(Boolean))]
-
-      const [{ data: profilesData }, { data: coursesData }] = await Promise.all([
-        userIds.length ? supabase.from('profiles').select('id, name, email, last_seen_at').in('id', userIds) : Promise.resolve({ data: [] }),
-        courseIds.length ? supabase.from('courses').select('id, title, duration_label, thumbnail_url').in('id', courseIds) : Promise.resolve({ data: [] }),
-      ])
-
-      const profilesById = Object.fromEntries((profilesData ?? []).map((profile) => [profile.id, profile]))
-      const coursesById = Object.fromEntries((coursesData ?? []).map((course) => [course.id, course]))
-      const grouped = enrollments.reduce((acc, enrollment) => {
-        const profile = profilesById[enrollment.user_id] ?? {}
-        const course = coursesById[enrollment.course_id] ?? {}
-        const key = enrollment.user_id
-        const existing = acc[key] ?? {
-          id: key,
-          name: profile.name ?? profile.email?.split('@')[0] ?? 'Student',
-          email: profile.email ?? 'No email saved',
-          lastSeen: profile.last_seen_at,
-          enrollments: [],
-        }
-
-        existing.enrollments.push({
-          ...enrollment,
-          courseTitle: course.title ?? 'Untitled course',
-          durationLabel: course.duration_label,
-          thumbnailUrl: course.thumbnail_url,
-        })
-
-        acc[key] = existing
-        return acc
-      }, {})
-
-      const nextStudents = Object.values(grouped).map((student) => {
-        const totalProgress = student.enrollments.reduce((sum, item) => sum + Number(item.progress ?? 0), 0)
-        return {
-          ...student,
-          progress: student.enrollments.length ? Math.round(totalProgress / student.enrollments.length) : 0,
-        }
-      })
-
-      setStudents(nextStudents)
-      setSelectedStudentId((current) => nextStudents.some((student) => student.id === current) ? current : null)
-      setLoadingStudents(false)
+        .neq('role', 'admin')
+        .order('created_at', { ascending: false })
+      if (error) { setLoadError(error.message); setLoading(false); return }
+      setStudents(data ?? [])
+      setLoading(false)
     }
-
     loadStudents()
   }, [])
 
-  const selectedStudent = students.find((student) => student.id === selectedStudentId)
+  const filtered = students.filter((s) => {
+    const matchSearch = !search ||
+      (s.name ?? '').toLowerCase().includes(search.toLowerCase()) ||
+      (s.email ?? '').toLowerCase().includes(search.toLowerCase())
+    const matchStatus = statusFilter === 'all' || (s.admission_status ?? 'prospect') === statusFilter
+    return matchSearch && matchStatus
+  })
 
-  function formatDate(value) {
-    if (!value) return 'Not recorded'
-    return new Date(value).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+  const selected = students.find((s) => s.id === selectedId)
+
+  function openStudent(student) {
+    setSelectedId(student.id)
+    setDetailAdmission(student.admission_status ?? 'prospect')
+    setDetailFee(student.fee_status ?? 'pending')
+    setDetailNotes(student.payment_notes ?? '')
+    setSaveMsg('')
+  }
+
+  async function saveAdminFields() {
+    if (!selectedId) return
+    setSaving(true)
+    setSaveMsg('')
+    const { error } = await supabase.from('profiles').update({
+      admission_status: detailAdmission,
+      fee_status: detailFee,
+      payment_notes: detailNotes.trim() || null,
+    }).eq('id', selectedId)
+    if (error) { setSaveMsg(error.message); setSaving(false); return }
+    setStudents((prev) => prev.map((s) => s.id === selectedId
+      ? { ...s, admission_status: detailAdmission, fee_status: detailFee, payment_notes: detailNotes.trim() || null }
+      : s))
+    setSaveMsg('Saved.')
+    setSaving(false)
+  }
+
+  function admissionBadgeClass(status) {
+    if (status === 'enrolled') return 'bg-success/10 text-success border-success/20'
+    if (status === 'discontinued') return 'bg-error/10 text-error border-error/20'
+    return 'bg-yellow-50 text-yellow-700 border-yellow-200'
+  }
+
+  function feeBadgeClass(status) {
+    if (status === 'paid') return 'bg-success/10 text-success border-success/20'
+    return 'bg-yellow-50 text-yellow-700 border-yellow-200'
   }
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-        <SectionTitle title="Students" subtitle="Progress, enrollments, certificates, and intervention signals." />
-        <Button><Plus className="mr-2 inline" size={15} />Add student</Button>
+    <div className="flex gap-5">
+      {/* ── Left: table ── */}
+      <div className="min-w-0 flex-1 space-y-4">
+        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+          <SectionTitle title="Students" subtitle="Onboarded students and their admission status." />
+        </div>
+
+        {/* Filters */}
+        <div className="flex flex-wrap gap-2">
+          <div className="relative flex-1 min-w-[180px]">
+            <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft" size={14} />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search name or email…"
+              className="w-full rounded-lg border border-border bg-surface py-2 pl-8 pr-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
+            />
+          </div>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-primary"
+          >
+            <option value="all">All statuses</option>
+            <option value="prospect">Prospect</option>
+            <option value="enrolled">Enrolled</option>
+            <option value="discontinued">Discontinued</option>
+          </select>
+        </div>
+
+        {loading ? (
+          <div className="py-12 text-center text-sm text-ink-muted">Loading students…</div>
+        ) : loadError ? (
+          <div className="rounded-2xl border border-error/20 bg-surface px-5 py-8 text-center">
+            <p className="font-semibold text-error">Could not load students.</p>
+            <p className="mt-1 text-sm text-ink-muted">{loadError}</p>
+          </div>
+        ) : students.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-border py-20 text-center">
+            <Users className="mx-auto mb-3 text-ink-soft" size={32} />
+            <p className="font-display text-lg font-semibold">No students yet.</p>
+            <p className="mt-1 text-sm text-ink-muted">Students appear here after completing onboarding.</p>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-border py-16 text-center">
+            <p className="font-semibold text-ink-muted">No results for those filters.</p>
+            <button type="button" onClick={() => { setSearch(''); setStatusFilter('all') }} className="mt-2 text-sm font-semibold text-primary">Clear filters</button>
+          </div>
+        ) : (
+          <div className="overflow-x-auto rounded-2xl border border-border bg-surface">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-xs font-semibold uppercase tracking-wide text-ink-muted">
+                  <th className="px-4 py-3">Name</th>
+                  <th className="px-4 py-3">Email</th>
+                  <th className="px-4 py-3">Phone</th>
+                  <th className="px-4 py-3">Country</th>
+                  <th className="px-4 py-3">Age</th>
+                  <th className="px-4 py-3">Admission</th>
+                  <th className="px-4 py-3">Fee</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((student) => {
+                  const admStatus = student.admission_status ?? 'prospect'
+                  const feeStatus = student.fee_status ?? 'pending'
+                  const isSelected = student.id === selectedId
+                  return (
+                    <tr
+                      key={student.id}
+                      onClick={() => openStudent(student)}
+                      className={`cursor-pointer border-b border-border last:border-b-0 transition hover:bg-surface-warm ${isSelected ? 'bg-primary-soft/30' : ''}`}
+                    >
+                      <td className="px-4 py-3 font-semibold">{student.name ?? student.email?.split('@')[0] ?? '—'}</td>
+                      <td className="px-4 py-3 text-ink-muted">{student.email ?? '—'}</td>
+                      <td className="px-4 py-3 text-ink-muted">{student.phone ?? '—'}</td>
+                      <td className="px-4 py-3 text-ink-muted">{student.country ?? '—'}</td>
+                      <td className="px-4 py-3 text-ink-muted">{student.age_group ?? '—'}</td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-block rounded-full border px-2.5 py-0.5 text-xs font-semibold capitalize ${admissionBadgeClass(admStatus)}`}>{admStatus}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-block rounded-full border px-2.5 py-0.5 text-xs font-semibold capitalize ${feeBadgeClass(feeStatus)}`}>{feeStatus}</span>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
-      {loadingStudents ? (
-        <div className="py-12 text-center text-sm text-ink-muted">Loading students...</div>
-      ) : studentError ? (
-        <div className="rounded-2xl border border-error/20 bg-surface px-5 py-8 text-center">
-          <p className="font-display text-lg font-semibold text-error">Could not load enrollments.</p>
-          <p className="mt-1 text-sm text-ink-muted">{studentError}</p>
-        </div>
-      ) : students.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border py-20 text-center">
-          <Users className="mx-auto mb-3 text-ink-soft" size={32} />
-          <p className="font-display text-lg font-semibold">No enrolled students yet.</p>
-          <p className="mt-1 text-sm text-ink-muted">When someone clicks Enroll Now, they will appear here.</p>
-        </div>
-      ) : (
-        <>
-          <div className="overflow-hidden rounded-2xl border border-border bg-surface">
-            {students.map((student) => (
-              <div key={student.id} className="grid gap-3 border-b border-border p-4 last:border-b-0 md:grid-cols-[1fr_120px_180px_120px] md:items-center">
-                <div>
-                  <h3 className="font-display text-xl font-semibold">{student.name}</h3>
-                  <p className="text-sm text-ink-muted">{student.email}</p>
-                </div>
-                <p className="text-sm text-ink-muted">{student.enrollments.length} course{student.enrollments.length === 1 ? '' : 's'}</p>
-                <div>
-                  <Progress value={student.progress} />
-                  <p className="mt-1 text-xs text-ink-muted">{student.progress}% average progress</p>
-                </div>
-                <Button variant="secondary" onClick={() => setSelectedStudentId(student.id)}>
-                  Open
-                </Button>
+      {/* ── Right: detail panel ── */}
+      {selected && (
+        <aside className="w-[340px] flex-shrink-0">
+          <div className="sticky top-6 rounded-2xl border border-border bg-surface shadow-sm overflow-hidden">
+            {/* Header */}
+            <div className="flex items-start justify-between gap-3 border-b border-border bg-surface-warm px-5 py-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Student profile</p>
+                <h2 className="mt-1 font-display text-xl font-semibold">{selected.name ?? selected.email?.split('@')[0]}</h2>
+                <p className="text-sm text-ink-muted">{selected.email}</p>
               </div>
-            ))}
+              <button type="button" onClick={() => setSelectedId(null)} className="mt-0.5 grid h-7 w-7 flex-shrink-0 place-items-center rounded-full hover:bg-border">
+                <X size={14} />
+              </button>
+            </div>
+
+            <div className="space-y-5 p-5">
+              {/* Section 1 — read-only info */}
+              <div className="space-y-2 text-sm">
+                <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Student info</p>
+                <InfoRow label="Phone" value={selected.phone} />
+                <InfoRow label="Country" value={selected.country} />
+                <InfoRow label="Age group" value={selected.age_group} />
+                {selected.portfolio_url && (
+                  <div className="flex gap-2">
+                    <span className="w-24 flex-shrink-0 text-ink-muted">Portfolio</span>
+                    <a href={selected.portfolio_url} target="_blank" rel="noopener noreferrer" className="truncate text-primary underline underline-offset-2">{selected.portfolio_url}</a>
+                  </div>
+                )}
+                {selected.artist_background && (
+                  <div>
+                    <p className="text-ink-muted">Art background</p>
+                    <p className="mt-1 rounded-lg bg-surface-warm p-2.5 text-ink leading-relaxed">{selected.artist_background}</p>
+                  </div>
+                )}
+                {selected.why_shilpa_shastra && (
+                  <div>
+                    <p className="text-ink-muted">Why Shilpa Shastra</p>
+                    <p className="mt-1 rounded-lg bg-surface-warm p-2.5 text-ink leading-relaxed">{selected.why_shilpa_shastra}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Section 2 — admin editable */}
+              <div className="space-y-3 border-t border-border pt-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Admin fields</p>
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-medium text-ink-muted">Admission status</span>
+                  <select value={detailAdmission} onChange={(e) => setDetailAdmission(e.target.value)} className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/15">
+                    <option value="prospect">Prospect</option>
+                    <option value="enrolled">Enrolled</option>
+                    <option value="discontinued">Discontinued</option>
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-medium text-ink-muted">Fee status</span>
+                  <select value={detailFee} onChange={(e) => setDetailFee(e.target.value)} className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/15">
+                    <option value="pending">Pending</option>
+                    <option value="paid">Paid</option>
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-medium text-ink-muted">Payment notes</span>
+                  <textarea rows={3} value={detailNotes} onChange={(e) => setDetailNotes(e.target.value)} placeholder="Installment plan, WhatsApp confirmations, etc." className="w-full resize-none rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/15" />
+                </label>
+                {saveMsg && <p className={`text-sm ${saveMsg === 'Saved.' ? 'text-success' : 'text-error'}`}>{saveMsg}</p>}
+                <Button className="w-full" onClick={saveAdminFields} disabled={saving}>{saving ? 'Saving…' : 'Save'}</Button>
+              </div>
+            </div>
           </div>
-
-          {selectedStudent && (
-            <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
-              <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">Student profile</p>
-                  <h2 className="mt-2 font-display text-2xl font-semibold">{selectedStudent.name}</h2>
-                  <p className="text-sm text-ink-muted">{selectedStudent.email}</p>
-                </div>
-                <div className="flex flex-col gap-2 text-sm text-ink-muted sm:items-end">
-                  <button type="button" onClick={() => setSelectedStudentId(null)} className="font-semibold text-primary">Close</button>
-                  <p>{selectedStudent.enrollments.length} enrolled course{selectedStudent.enrollments.length === 1 ? '' : 's'} · {selectedStudent.progress}% average progress</p>
-                </div>
-              </div>
-
-              <div className="mt-5 grid gap-3">
-                {selectedStudent.enrollments.map((enrollment) => (
-                  <article key={enrollment.id} className="grid gap-3 rounded-xl border border-border bg-surface-warm p-4 md:grid-cols-[1fr_160px_120px] md:items-center">
-                    <div>
-                      <h3 className="font-display text-lg font-semibold">{enrollment.courseTitle}</h3>
-                      <p className="mt-1 text-sm text-ink-muted">Enrolled {formatDate(enrollment.enrolled_at)}</p>
-                      {enrollment.durationLabel && <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-ink-soft">{enrollment.durationLabel}</p>}
-                    </div>
-                    <div>
-                      <Progress value={Math.round(Number(enrollment.progress ?? 0))} />
-                      <p className="mt-1 text-xs text-ink-muted">{Math.round(Number(enrollment.progress ?? 0))}% complete</p>
-                    </div>
-                    <Badge variant={enrollment.status === 'active' ? 'success' : 'default'}>{enrollment.status ?? 'active'}</Badge>
-                  </article>
-                ))}
-              </div>
-            </section>
-          )}
-        </>
+        </aside>
       )}
+    </div>
+  )
+}
+
+function InfoRow({ label, value }) {
+  if (!value) return null
+  return (
+    <div className="flex gap-2">
+      <span className="w-24 flex-shrink-0 text-ink-muted">{label}</span>
+      <span className="text-ink">{value}</span>
     </div>
   )
 }
