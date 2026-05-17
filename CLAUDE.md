@@ -2,7 +2,7 @@
 
 This file is the living memory for the Divyakala LMS project. Every Claude Code session and every future Claude conversation should read this first. Update it after every major decision or build session.
 
-Last updated: May 17, 2026 (session 24 — verification pass, corrected stale entries)
+Last updated: May 17, 2026 (session 25 — password auth fallback, onboarding flow, admin CRM)
 
 ---
 
@@ -418,10 +418,13 @@ create table notifications (
 - `AuthContext` + `AuthProvider` + `useAuth()` hook live at the top of `App.jsx` (inline, not a separate file — do NOT move until post-contract refactor)
 - `AuthProvider` listens to `supabase.auth.onAuthStateChange`, fetches `profiles` row, exposes `{ session, profile, loading }`
 - `LoadingScreen` — warm branded loading state shown while session resolves
-- `RootRedirect` — routes admin role → `/admin`, student → `/learning`, unauthenticated → `/auth/sign-in`
+- `RootRedirect` — routes admin → `/admin`, unauthenticated → `/auth/sign-in`, incomplete student → `/onboarding`, complete student → `/learning`
+- `isProfileComplete(profile)` — returns true if profile has country + phone + age_group + artist_background + why_shilpa_shastra. Used by RootRedirect to gate /onboarding redirect.
 - `Protected` — async-aware session guard for student routes
 - `AdminProtected` — checks session + `profile.role === 'admin'`
-- Student auth (`Auth` component): sign-up calls `supabase.auth.signUp` (random password, passwordless) then `signInWithOtp`; sign-in calls `signInWithOtp` directly; both verify via `verifyOtp`. OTP boxes are fully controlled with paste + auto-advance + backspace support.
+- Student auth (`Auth` component): sign-up calls `supabase.auth.signUp` (random password, passwordless) then `signInWithOtp`; sign-in primary path is OTP magic link with `emailRedirectTo: 'https://divyakala-lms.vercel.app/auth/callback'`; OTP boxes are fully controlled with paste + auto-advance + backspace support.
+- **Password fallback (session 25):** sign-in page has a "Sign in with password instead" toggle. When active, shows email + password fields and calls `supabase.auth.signInWithPassword`. Error message: "No account found or wrong password. Please sign up first." OTP code is fully preserved — password is additive only.
+- `AuthCallback` component at `/auth/callback`: calls `supabase.auth.getSession()` then redirects to `/` → RootRedirect handles role routing.
 - After successful student sign-up OTP verification, the app now upserts `profiles` with `id`, `email`, `name`, and `role = student` so new enrolled students show their captured name in admin.
 - Admin auth (`AdminAuth` component): `signInWithPassword`, checks profile role, signs out immediately if not admin
 - Sign out in both Shell and AdminShell sidebars + admin header calls `supabase.auth.signOut()`
@@ -439,6 +442,42 @@ The table names in the deployed schema use `profiles` (not `users`). Always use 
 - `profiles`: own-row read/write + `create policy "Authenticated read profiles" on profiles for select to authenticated using (true)` (added to fix circular dependency)
 - `storage.objects` (thumbnails bucket): `create policy "Authenticated upload thumbnails" on storage.objects for insert to authenticated with check (bucket_id = 'thumbnails')`
 - Courses, sessions, cards, enrollments, submissions, workshops, notifications: policies as defined in schema section
+
+### Student Onboarding (`/onboarding`) — added session 25
+- Route: `/onboarding`, wrapped in `<Protected>` so only signed-in students see it
+- Component: `StudentOnboarding`
+- Only shows country/phone fields if the profile is missing them (they may have been set during sign-up)
+- Required fields: age_group (dropdown: Under 19 / 19–30 / Above 30), artist_background (textarea), why_shilpa_shastra (textarea)
+- Optional field: portfolio_url
+- On save: upserts new columns into `profiles`, then `refreshProfile`, then redirects to `/learning`
+- RootRedirect calls `isProfileComplete(profile)` after fetching profile; incomplete students are sent to `/onboarding` before reaching `/learning`
+
+### New profiles columns — added session 25
+Run this SQL in Supabase SQL Editor (idempotent, safe to re-run):
+```sql
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS age_group text;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS artist_background text;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS why_shilpa_shastra text;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS portfolio_url text;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS admission_status text DEFAULT 'prospect';
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS fee_status text DEFAULT 'pending';
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS payment_notes text;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS created_at timestamptz DEFAULT now();
+```
+
+### Admin Students CRM (`/admin/students`) — added session 25
+- Old `AdminStudents` component replaced by `AdminStudentsCRM`. Old component now just returns `<AdminStudentsCRM />` for compat.
+- Data source: `SELECT * FROM profiles WHERE role != 'admin' ORDER BY created_at DESC` — reads students directly, not via enrollments join
+- Table columns: Name, Email, Phone, Country, Age Group, Admission Status (badge), Fee Status (badge)
+- Admission status badge colors: prospect → yellow, enrolled → green, discontinued → red
+- Fee status badge colors: pending → yellow, paid → green
+- Client-side search by name/email + admission status filter dropdown
+- Empty state: "No students yet. Students appear here after completing onboarding."
+- No-results state with "Clear filters" button
+- Row click opens side detail panel (right-side sticky aside, 340px wide)
+- Detail panel Section 1 (read-only): name, email, phone, country, age_group, portfolio_url (link), artist_background, why_shilpa_shastra
+- Detail panel Section 2 (editable): admission_status dropdown, fee_status dropdown, payment_notes textarea, Save button — updates only these 3 fields in profiles
+- `InfoRow` helper component renders a label+value pair, returns null if value is empty
 
 ### Cards (admin `/admin/cards`)
 - Admin Cards is currently a simple "Coming soon" page, not an active CRUD surface
