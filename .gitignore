@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# Local scripts — never commit
+seed-users.js
+.env.local.txt
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

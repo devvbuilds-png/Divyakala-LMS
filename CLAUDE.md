@@ -2,7 +2,7 @@
 
 This file is the living memory for the Divyakala LMS project. Every Claude Code session and every future Claude conversation should read this first. Update it after every major decision or build session.
 
-Last updated: May 17, 2026 (session 25 — password auth fallback, onboarding flow, admin CRM)
+Last updated: May 17, 2026 (session 25 — auth fixed, onboarding, admin CRM, mock students seeded)
 
 ---
 
@@ -31,14 +31,20 @@ A full-stack LMS for Drdha Vrata Gorrick (Divyakala), a traditionally trained Sh
 
 ## Repository
 
-Location: `D:\AI projects\Divyakala\shortcourse-deploy-worktree\Codex prototype\divyakala-lms`
+Location: `D:\AI projects\Divyakala\shortcourse-deploy-worktree\`
+**App files are at the worktree root** — `src/`, `public/`, `package.json`, `index.html` are all at the root, not inside `Codex prototype/`. Vercel root directory must be blank (not set to a subfolder).
+
+Git: **all work goes directly on `main` branch** — no PRs, no feature branches, push straight to `main`.
 
 Key files:
 - `src/App.jsx` — currently monolithic, contains all routing + pages + components. Do NOT refactor until after the demo is shipped and Drdha says yes.
+- `src/lib/supabase.js` — single Supabase client, initialized once. Never re-initialize.
 - `src/index.css` — global styles, Poppins import, root font size 13px
 - `tailwind.config.js` — Divyakala color tokens
 - `public/art/` — Drdha's artwork assets (webp)
 - `public/logo.webp` — Divyakala wordmark
+- `.env.local.txt` — local only, gitignored, holds SUPABASE_SERVICE_ROLE_KEY for admin scripts
+- `seed-users.js` — local only, gitignored, one-time seed script for mock students
 
 ---
 
@@ -422,17 +428,16 @@ create table notifications (
 - `isProfileComplete(profile)` — returns true if profile has country + phone + age_group + artist_background + why_shilpa_shastra. Used by RootRedirect to gate /onboarding redirect.
 - `Protected` — async-aware session guard for student routes
 - `AdminProtected` — checks session + `profile.role === 'admin'`
-- Student auth (`Auth` component): sign-up calls `supabase.auth.signUp` (random password, passwordless) then `signInWithOtp`; sign-in primary path is OTP magic link with `emailRedirectTo: 'https://divyakala-lms.vercel.app/auth/callback'`; OTP boxes are fully controlled with paste + auto-advance + backspace support.
-- **Password fallback (session 25):** sign-in page has a "Sign in with password instead" toggle. When active, shows email + password fields and calls `supabase.auth.signInWithPassword`. Error message: "No account found or wrong password. Please sign up first." OTP code is fully preserved — password is additive only.
-- `AuthCallback` component at `/auth/callback`: calls `supabase.auth.getSession()` then redirects to `/` → RootRedirect handles role routing.
-- After successful student sign-up OTP verification, the app now upserts `profiles` with `id`, `email`, `name`, and `role = student` so new enrolled students show their captured name in admin.
-- Admin auth (`AdminAuth` component): `signInWithPassword`, checks profile role, signs out immediately if not admin
-- Sign out in both Shell and AdminShell sidebars + admin header calls `supabase.auth.signOut()`
+- **Student sign-up (session 25 final):** collects first name, last name, country, phone, email, password. Calls `supabase.auth.signUp({ email, password, options: { data: { name }, emailRedirectTo: undefined } })` — no confirmation email triggered. Immediately calls `signInWithPassword({ email, password })` to log in. Upserts `profiles` with `id, email, name, country, phone, role: 'student', admission_status: 'prospect', fee_status: 'pending'`. Redirects to `/onboarding`.
+- **Email confirmation is DISABLED in Supabase Dashboard** (Authentication → Providers → Email → "Confirm email" OFF). Required for sign-up to work without email.
+- **Student sign-in primary path:** OTP magic link. `signInWithOtp({ email, options: { emailRedirectTo: 'https://divyakala-lms.vercel.app/auth/callback' } })`. OTP boxes are fully controlled with paste + auto-advance + backspace. `/auth/callback` route handled by `AuthCallback` component which calls `getSession()` then redirects to `/`.
+- **Student sign-in password fallback:** "Sign in with password instead" toggle below OTP form. Shows email + password fields, calls `signInWithPassword`. Error: "No account found or wrong password. Please sign up first."
+- Admin auth (`AdminAuth` component): `signInWithPassword`, checks `profile.role === 'admin'`, signs out immediately if not admin. Unchanged.
+- Sign out in both Shell and AdminShell sidebars calls `supabase.auth.signOut()`
 - Avatar and sidebar user name/email pull from real `profile` row
 - "Admin Studio →" pill link appears in student top bar only when `profile.role === 'admin'`
-- Student sign-up now captures first name, last name, country, and phone, and saves name/country/phone into `profiles`.
 - Student avatar buttons in both the sidebar footer and top bar open a real profile modal.
-- Profile modal lets the student edit full name, country, and phone/WhatsApp; email is shown read-only because OTP auth owns it.
+- Profile modal lets the student edit full name, country, and phone/WhatsApp; email is shown read-only.
 - Saving the profile upserts `profiles` and refreshes `AuthContext.profile` immediately.
 
 ### Supabase schema actually deployed
@@ -478,6 +483,21 @@ ALTER TABLE profiles ADD COLUMN IF NOT EXISTS created_at timestamptz DEFAULT now
 - Detail panel Section 1 (read-only): name, email, phone, country, age_group, portfolio_url (link), artist_background, why_shilpa_shastra
 - Detail panel Section 2 (editable): admission_status dropdown, fee_status dropdown, payment_notes textarea, Save button — updates only these 3 fields in profiles
 - `InfoRow` helper component renders a label+value pair, returns null if value is empty
+- **Will be extended** in the next session when long courses and batches are added
+
+### Mock students seeded — session 25
+8 demo students created via `seed-users.js` (local script, gitignored). All use password `12345678`. All have full onboarding data so they land on `/learning` directly.
+
+| Name | Email | Admission | Fee |
+|---|---|---|---|
+| Priya Sharma | priya.sharma@demo.com | enrolled | paid |
+| Arjun Mehta | arjun.mehta@demo.com | enrolled | paid |
+| Kavya Nair | kavya.nair@demo.com | prospect | pending |
+| Rohan Das | rohan.das@demo.com | prospect | pending |
+| Ananya Iyer | ananya.iyer@demo.com | enrolled | pending |
+| Vikram Patel | vikram.patel@demo.com | enrolled | paid |
+| Meera Joshi | meera.joshi@demo.com | prospect | pending |
+| Aditya Kumar | aditya.kumar@demo.com | prospect | pending |
 
 ### Cards (admin `/admin/cards`)
 - Admin Cards is currently a simple "Coming soon" page, not an active CRUD surface
@@ -686,13 +706,9 @@ ALTER TABLE profiles ADD COLUMN IF NOT EXISTS created_at timestamptz DEFAULT now
 - Journal preview shows submitted image files directly, uses review feedback/status as the caption, and has a warm empty state before the student's first submission
 
 ### Admin Students
-- `/admin/students` now reads real `enrollments` from Supabase instead of the `adminStudents` mock array
-- It fetches related `profiles` and `courses` separately, then groups enrollments by student
-- Main list preserves the existing old UI: student name/email, enrolled course count, average progress, and an `Open` button
-- Details are not open by default; clicking `Open` reveals a detail panel with each enrolled course, enrolled date, duration label, progress bar, enrollment status badge, and a Close action
-- Student name falls back to the email prefix if `profiles.name` is missing, instead of showing "Student" whenever possible
-- Empty state shows "No enrolled students yet" and explains that students appear after clicking Enroll Now
-- If RLS blocks admin reads of `enrollments`, `profiles`, or `courses`, the page shows the Supabase error inline
+- `/admin/students` now renders `AdminStudentsCRM` (see session 25 section above for full spec)
+- Old enrollment-grouped view is replaced — students come from `profiles` directly, not `enrollments` join
+- The old `AdminStudents` wrapper component now just returns `<AdminStudentsCRM />` for route compat
 
 ### Still using mock data (not yet wired)
 - `CourseDetail` still has a simple static instructor paragraph; this should become editable later
@@ -729,3 +745,48 @@ ALTER TABLE profiles ADD COLUMN IF NOT EXISTS created_at timestamptz DEFAULT now
 - Keep all colors within the existing Tailwind token system
 - Empty states must have warm copy + CTA — never a sad icon and "No data found"
 - Every route change must scroll to top (ScrollToTop already exists, keep it)
+- All work goes directly on `main` branch — no PRs, no feature branches
+- Service role key lives only in `.env.local.txt` locally — never commit, never put on Vercel
+- `seed-users.js` is gitignored — re-run locally if demo data needs to be rebuilt
+
+---
+
+## Next Session — Long Courses + Batches
+
+### What to build
+1. **Long course type** — distinct from short courses. New `course_type` column on `courses` table: `short` (default) or `long`.
+2. **Browse page** — shows both short and long course cards. Long course cards display a "Request Batch Placement" CTA instead of "Enroll Now".
+3. **Batch interest capture** — clicking "Request Batch Placement" records the student's interest in `profiles.payment_notes` (or a new `batch_interest` column) and shows a confirmation message.
+4. **Admin batch creation** — admin can create batches tied to a long course: batch name, start date, capacity, schedule description.
+5. **Student enrollment into batches** — admin manually enrolls students into a batch from the CRM detail panel.
+6. **CRM detail panel extension** — show enrolled short courses (from `enrollments`) and long course batch interest/enrollment in the same panel.
+
+### Database additions needed (next session)
+```sql
+-- Add course type
+ALTER TABLE courses ADD COLUMN IF NOT EXISTS course_type text DEFAULT 'short';
+
+-- Batches table
+CREATE TABLE IF NOT EXISTS batches (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  course_id uuid REFERENCES courses(id) ON DELETE CASCADE,
+  name text NOT NULL,
+  starts_at date,
+  capacity int,
+  schedule_description text,
+  status text DEFAULT 'upcoming',
+  created_at timestamptz DEFAULT now()
+);
+
+-- Batch enrollments
+CREATE TABLE IF NOT EXISTS batch_enrollments (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  batch_id uuid REFERENCES batches(id) ON DELETE CASCADE,
+  user_id uuid REFERENCES profiles(id),
+  enrolled_at timestamptz DEFAULT now(),
+  status text DEFAULT 'active'
+);
+```
+
+### Reference implementation
+The `codex/current-demo-source` branch has a reference implementation of batches (`StudentBatchDashboard`, `term_groups`, `batch_sessions`, `term_modules` tables). Read it for UI patterns but do NOT copy the schema directly — the tables above are the simplified version for this build.
