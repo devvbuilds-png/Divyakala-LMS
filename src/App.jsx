@@ -2793,7 +2793,11 @@ function LessonPlayer() {
       ])
 
       setCourse(courseData ?? null)
-      setCourseSessions(sessionsData ?? [])
+      setCourseSessions(
+        courseData?.course_type === 'long'
+          ? flattenLongCourseSessions(courseData)
+          : sessionsData ?? []
+      )
       setEnrollment(enrollmentData ?? null)
       setLoading(false)
     }
@@ -2803,8 +2807,15 @@ function LessonPlayer() {
 
   useEffect(() => {
     async function loadCurrentSession() {
-      if (!activeSession || course?.course_type === 'long') {
+      if (!activeSession) {
         setCurrentSessionData(null)
+        return
+      }
+
+      if (course?.course_type === 'long') {
+        const flattened = flattenLongCourseSessions(course)
+        const found = flattened.find((s) => s.id === activeSession) ?? null
+        setCurrentSessionData(found)
         return
       }
 
@@ -2818,7 +2829,7 @@ function LessonPlayer() {
     }
 
     loadCurrentSession()
-  }, [activeSession, course?.course_type])
+  }, [activeSession, course])
 
   useEffect(() => {
     async function loadSessionSubmissions() {
