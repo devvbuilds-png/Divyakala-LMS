@@ -2,7 +2,7 @@
 
 This file is the living memory for the Divyakala LMS project. Every Claude Code session and every future Claude conversation should read this first. Update it after every major decision or build session.
 
-Last updated: May 17, 2026 (Codex handoff continuation — long-course detail + admin module planner)
+Last updated: May 17, 2026 (Codex continuation — long-course management approvals + student learning)
 
 ---
 
@@ -233,6 +233,22 @@ Notes:
 - Vercel deploys code only; it does not apply Supabase schema changes.
 - The code retries around missing optional columns and shows an inline warning naming fields that could not persist.
 - If modules do not appear on the student page after admin save, check that `long_course_structure` exists.
+
+### Long-course management and enrollment approvals
+
+Admin now has `/admin/long-course-management` in the sidebar.
+
+Implemented demo flow:
+- Student long-course detail `Request Enrollment` creates a pending `enrollments` row instead of instantly enrolling.
+- Admin sees pending requests in Long Course Management.
+- Admin can accept/reject requests.
+- Accept assigns the student to a cohort and batch.
+- Enrolled long-course students appear in My Learning under the Long courses tab.
+- Long-course learning uses the existing short-course player shell, but sessions come from `courses.long_course_structure` instead of the short-course `sessions` table.
+- If a long-course session is `upcoming`, the lesson screen shows date/time and Zoom link.
+- If a long-course session is `concluded`, the lesson screen uses the saved YouTube/recording URL.
+
+Run `supabase-long-course-management.sql` in Supabase SQL Editor before demoing approvals so `enrollments.cohort_name`, `batch_name`, `requested_at`, and `decision_at` exist.
 
 ### Seeded long-course demo data
 

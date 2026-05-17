@@ -200,6 +200,10 @@ function normalizeLongCourseModules(value) {
     const sessions = Array.isArray(module.sessions) ? module.sessions : []
     const normalizedSessions = sessions.map((session) => ({
       title: typeof session === 'string' ? session : session?.title ?? '',
+      status: typeof session === 'string' ? 'upcoming' : session?.status ?? 'upcoming',
+      starts_at: typeof session === 'string' ? '' : session?.starts_at ?? '',
+      zoom_url: typeof session === 'string' ? '' : session?.zoom_url ?? '',
+      recording_url: typeof session === 'string' ? '' : session?.recording_url ?? session?.video_url ?? '',
     }))
 
     return {
@@ -219,6 +223,35 @@ function toCourseStructureModules(modules) {
     sessions: module.sessions.map((session) => session.title).filter(Boolean),
   }))
 }
+
+function getLongCourseSessionId(moduleIndex, sessionIndex) {
+  return `long-${moduleIndex + 1}-${sessionIndex + 1}`
+}
+
+function flattenLongCourseSessions(course) {
+  const modules = normalizeLongCourseModules(course?.long_course_structure ?? course?.modules ?? [])
+  return modules.flatMap((module, moduleIndex) => module.sessions.map((session, sessionIndex) => ({
+    id: getLongCourseSessionId(moduleIndex, sessionIndex),
+    course_id: course.id,
+    module_title: module.title,
+    title: session.title || `Session ${sessionIndex + 1}`,
+    position: modules.slice(0, moduleIndex).reduce((sum, item) => sum + item.sessions.length, 0) + sessionIndex + 1,
+    is_preview: moduleIndex === 0 && sessionIndex === 0,
+    status: session.status || 'upcoming',
+    starts_at: session.starts_at || '',
+    zoom_url: session.zoom_url || '',
+    video_url: session.status === 'concluded' ? session.recording_url || '' : '',
+    recording_url: session.recording_url || '',
+    description: module.description,
+  })))
+}
+
+const LONG_COURSE_COHORTS = [
+  { name: 'October 2024 Cohort', starts: 'October 2024' },
+  { name: 'February 2025 Cohort', starts: 'February 2025' },
+]
+
+const LONG_COURSE_BATCHES = ['Batch A', 'Batch B']
 
 const workshops = [
   { title: 'Iconography Q&A: Mudras & Their Meanings', date: 'Saturday, 14 December 2025', time: '7:00 PM IST', day: '14', month: 'DEC', duration: '1 hour', description: 'Bring your questions about hand gestures and their symbolism. Drdha will draw examples live and answer questions.' },
@@ -1395,7 +1428,7 @@ function MyLearning() {
         return
       }
 
-      const userEnrollments = enrollmentRows ?? []
+      const userEnrollments = (enrollmentRows ?? []).filter((item) => item.status === 'active' || item.status === 'completed')
       const courseIds = [...new Set(userEnrollments.map((item) => item.course_id).filter(Boolean))]
 
       if (!courseIds.length) {
@@ -1420,7 +1453,8 @@ function MyLearning() {
           const course = coursesById[enrollment.course_id] ?? courses.find((item) => item.id === enrollment.course_id)
           if (!course) return null
 
-          const courseSessionRows = sessionsByCourse[enrollment.course_id] ?? []
+          const isLong = course.course_type === 'long'
+          const courseSessionRows = isLong ? flattenLongCourseSessions(course) : sessionsByCourse[enrollment.course_id] ?? []
           const fallbackSessions = (course.sessionsList ?? []).map(([id, title], index) => ({ id, title, position: index + 1 }))
           const orderedSessions = courseSessionRows.length ? courseSessionRows : fallbackSessions
           const progress = Math.round(Number(enrollment.progress ?? 0))
@@ -1864,7 +1898,7 @@ function CourseDetail() {
       ])
 
       setCourse(courseData ?? null)
-      setCourseSessions(sessionsData ?? [])
+      setCourseSessions(courseData?.course_type === 'long' ? flattenLongCourseSessions(courseData) : sessionsData ?? [])
       setEnrollment(enrollmentData ?? null)
       setLoading(false)
     }
@@ -1906,11 +1940,34 @@ function CourseDetail() {
       return
     }
 
-    const firstSession = previewSession ?? courseSessions[0] ?? null
+    const longCourseSessions = isLongCourse ? flattenLongCourseSessions(displayCourse) : []
+    const firstSession = isLongCourse ? longCourseSessions[0] ?? null : previewSession ?? courseSessions[0] ?? null
     const target = firstSession ? `/courses/${displayCourse.id}/lesson/${firstSession.id}` : '/learning'
 
     if (enrollment) {
-      navigate(target)
+      if (enrollment.status === 'active' || enrollment.status === 'completed') navigate(target)
+      if (enrollment.status === 'rejected' && isLongCourse) {
+        setEnrolling(true)
+        let { data, error } = await supabase
+          .from('enrollments')
+          .update({ status: 'pending', requested_at: new Date().toISOString(), decision_at: null })
+          .eq('id', enrollment.id)
+          .select()
+          .single()
+        if (error && isMissingSupabaseColumn(error)) {
+          const fallback = await supabase
+            .from('enrollments')
+            .update({ status: 'pending' })
+            .eq('id', enrollment.id)
+            .select()
+            .single()
+          data = fallback.data
+          error = fallback.error
+        }
+        setEnrolling(false)
+        if (error) setEnrollError(error.message)
+        else setEnrollment(data)
+      }
       return
     }
 
@@ -1937,7 +1994,7 @@ function CourseDetail() {
         course_id: displayCourse.id,
         progress: 0,
         last_session_id: firstSession?.id ?? null,
-        status: 'active',
+        status: isLongCourse ? 'pending' : 'active',
       })
       .select()
       .single()
@@ -1950,6 +2007,7 @@ function CourseDetail() {
     }
 
     setEnrollment(data)
+    if (isLongCourse) return
     navigate(target)
   }
 
@@ -1968,6 +2026,10 @@ function CourseDetail() {
         faqItems={faqItems}
         open={open}
         setOpen={setOpen}
+        enrollment={enrollment}
+        enrolling={enrolling}
+        enrollError={enrollError}
+        onEnroll={handleEnroll}
       />
     )
   }
@@ -2150,6 +2212,10 @@ function LongCourseDetail({
   faqItems,
   open,
   setOpen,
+  enrollment,
+  enrolling,
+  enrollError,
+  onEnroll,
 }) {
   const [openModule, setOpenModule] = useState(0)
   const modules = displayCourse.long_course_structure
@@ -2172,6 +2238,14 @@ function LongCourseDetail({
   const plannedSessionCount = sessionCount || displayCourse.session_count || totalSessions
   const liveFormatLabel = 'Live sessions + recordings'
   const enrollmentLabel = 'By request'
+  const requestLabel = enrollment?.status === 'pending'
+    ? 'Request Pending'
+    : enrollment?.status === 'active' || enrollment?.status === 'completed'
+      ? 'Continue Learning'
+      : enrollment?.status === 'rejected'
+        ? 'Request Again'
+        : enrolling ? 'Requesting...' : 'Request Enrollment'
+  const requestDisabled = enrolling || enrollment?.status === 'pending'
 
   const courseFacts = [
     durationLabel ? { label: 'Duration', value: durationLabel } : null,
@@ -2201,9 +2275,9 @@ function LongCourseDetail({
             </div>
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <span className="font-display text-[1.55rem] font-semibold text-[#b8861a]">{priceDisplay}</span>
-              <Button type="button">Request Enrollment</Button>
+              <Button type="button" onClick={onEnroll} disabled={requestDisabled}>{requestLabel}</Button>
               <a href="#course-trailer">
-                <Button type="button" variant="secondary">Watch Free Preview</Button>
+              <Button type="button" variant="secondary">Watch Free Preview</Button>
               </a>
             </div>
           </div>
@@ -2386,11 +2460,13 @@ function LongCourseDetail({
           <div className="rounded-xl border border-[#ddc990] bg-white p-5 shadow-sm">
             <p className="font-display text-[1.45rem] font-semibold text-[#b8861a]">{priceDisplay}</p>
             <div className="mt-3 flex flex-col gap-2">
-              <Button type="button" className="w-full justify-center">Request Enrollment</Button>
+              <Button type="button" className="w-full justify-center" onClick={onEnroll} disabled={requestDisabled}>{requestLabel}</Button>
               <a href="#course-trailer" className="block">
                 <Button type="button" variant="secondary" className="w-full justify-center">Watch Free Preview</Button>
               </a>
             </div>
+            {enrollError && <p className="mt-3 text-[12px] font-semibold text-error">{enrollError}</p>}
+            {enrollment?.status === 'pending' && <p className="mt-3 rounded-lg border border-primary-soft bg-primary-soft/30 px-3 py-2 text-[12px] font-semibold text-[#7a6040]">Your request is with Drdha. Once approved, this course will open in My Learning.</p>}
             <div className="mt-5 space-y-2.5 border-t border-[#ede0ba] pt-4">
               {courseFacts.map(({ label, value }) => (
                 <div key={label} className="flex items-baseline justify-between gap-2">
@@ -2726,7 +2802,7 @@ function LessonPlayer() {
 
   useEffect(() => {
     async function loadCurrentSession() {
-      if (!activeSession) {
+      if (!activeSession || course?.course_type === 'long') {
         setCurrentSessionData(null)
         return
       }
@@ -2741,7 +2817,7 @@ function LessonPlayer() {
     }
 
     loadCurrentSession()
-  }, [activeSession])
+  }, [activeSession, course?.course_type])
 
   useEffect(() => {
     async function loadSessionSubmissions() {
@@ -3042,6 +3118,7 @@ function OverviewWorkspace({ activeSession, currentSession, lessonContent, sessi
 function LessonVideo({ activeSession, currentSession }) {
   const videoUrl = currentSession?.video_url?.trim() ?? ''
   const videoType = getVideoUrlType(videoUrl)
+  const isUpcomingLive = currentSession?.zoom_url && currentSession?.status !== 'concluded'
 
   if (!videoUrl) {
     return (
@@ -3050,8 +3127,15 @@ function LessonVideo({ activeSession, currentSession }) {
           <div className="absolute inset-0 grid place-items-center p-6 text-center">
             <div>
               <button className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-surface text-primary shadow-lg"><Play size={24} /></button>
-              <p className="mt-4 text-xs font-semibold uppercase tracking-[0.18em] text-primary-soft">Video coming soon</p>
-              <p className="mt-1.5 text-xs text-chrome-text">No video URL has been added for this session yet.</p>
+              <p className="mt-4 text-xs font-semibold uppercase tracking-[0.18em] text-primary-soft">{isUpcomingLive ? 'Upcoming live session' : 'Video coming soon'}</p>
+              {isUpcomingLive ? (
+                <div className="mt-2 space-y-2">
+                  {currentSession.starts_at && <p className="text-sm font-semibold text-white">{new Date(currentSession.starts_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</p>}
+                  <a href={currentSession.zoom_url} target="_blank" rel="noreferrer" className="inline-flex rounded-full bg-primary px-4 py-2 text-xs font-semibold text-white">Open Zoom link</a>
+                </div>
+              ) : (
+                <p className="mt-1.5 text-xs text-chrome-text">No recording has been added for this session yet.</p>
+              )}
             </div>
           </div>
         </div>
@@ -3685,6 +3769,7 @@ function AdminShell() {
         <nav className="mt-6 space-y-1.5 px-2.5">
           <AdminNavItem to="/admin" icon={BarChart3} label="Dashboard" collapsed={collapsed} end />
           <AdminNavItem to="/admin/courses" icon={BookOpen} label="Courses" collapsed={collapsed} />
+          <AdminNavItem to="/admin/long-course-management" icon={Layers} label="Long Course Management" collapsed={collapsed} />
           <AdminNavItem to="/admin/assignments" icon={ClipboardCheck} label="Assignments" collapsed={collapsed} />
           <AdminNavItem to="/admin/students" icon={Users} label="Students" collapsed={collapsed} />
           <AdminNavItem to="/admin/settings" icon={Settings} label="Demo Guide" collapsed={collapsed} />
@@ -3733,6 +3818,7 @@ function AdminShell() {
             <Route path="courses" element={<AdminCourses />} />
             <Route path="courses/new" element={<AdminCourseEditor />} />
             <Route path="courses/:courseId" element={<AdminCourseEditor />} />
+            <Route path="long-course-management" element={<AdminLongCourseManagement />} />
             <Route path="playlists" element={<AdminPlaylists />} />
             <Route path="assignments" element={<AdminAssignments />} />
             <Route path="students" element={<AdminStudentsCRM />} />
@@ -3747,6 +3833,7 @@ function AdminShell() {
 
 function getAdminTitle(pathname) {
   if (pathname.includes('/cards')) return 'Card Library'
+  if (pathname.includes('/long-course-management')) return 'Long Course Management'
   if (pathname.includes('/courses/')) return 'Edit Course'
   if (pathname.includes('/courses')) return 'Course Builder'
   if (pathname.includes('/playlists')) return 'Playlist Builder'
@@ -4542,7 +4629,13 @@ function AdminCourseEditor() {
         title: module.title.trim(),
         description: module.description.trim(),
         planned_sessions: Number(module.planned_sessions) || 0,
-        sessions: module.sessions.map((session) => ({ title: session.title.trim() })).filter((session) => session.title),
+        sessions: module.sessions.map((session) => ({
+          title: session.title.trim(),
+          status: session.status || 'upcoming',
+          starts_at: session.starts_at || '',
+          zoom_url: session.zoom_url || '',
+          recording_url: session.recording_url || '',
+        })).filter((session) => session.title),
       })).filter((module) => module.title || module.description || module.planned_sessions || module.sessions.length)
       const plannedSessionCount = cleanedModules.reduce((sum, module) => sum + (Number(module.planned_sessions) || module.sessions.length), 0)
       const extendedFields = {
@@ -5072,6 +5165,302 @@ function CourseAdminCard({ course, enrollments = [], onStatusChange, onDelete })
         </div>
       </div>
     </article>
+  )
+}
+
+function AdminLongCourseManagement() {
+  const [longCourses, setLongCourses] = useState([])
+  const [selectedCourseId, setSelectedCourseId] = useState('')
+  const [enrollments, setEnrollments] = useState([])
+  const [profilesById, setProfilesById] = useState({})
+  const [drafts, setDrafts] = useState({})
+  const [modules, setModules] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState('')
+
+  const selectedCourse = longCourses.find((course) => course.id === selectedCourseId) ?? longCourses[0] ?? null
+
+  useEffect(() => { loadLongCourseManagement() }, [])
+
+  useEffect(() => {
+    if (selectedCourse) setModules(normalizeLongCourseModules(selectedCourse.long_course_structure))
+  }, [selectedCourse?.id])
+
+  async function loadLongCourseManagement() {
+    setLoading(true)
+    setMessage('')
+    const { data: courseRows } = await supabase
+      .from('courses')
+      .select('*')
+      .eq('course_type', 'long')
+      .order('created_at', { ascending: false })
+
+    const courses = courseRows ?? []
+    setLongCourses(courses)
+    setSelectedCourseId((current) => current || courses[0]?.id || '')
+
+    if (!courses.length) {
+      setEnrollments([])
+      setLoading(false)
+      return
+    }
+
+    const { data: enrollmentRows, error } = await supabase
+      .from('enrollments')
+      .select('*')
+      .in('course_id', courses.map((course) => course.id))
+      .order('enrolled_at', { ascending: false })
+
+    if (error) {
+      setMessage(error.message)
+      setEnrollments([])
+      setLoading(false)
+      return
+    }
+
+    const rows = enrollmentRows ?? []
+    setEnrollments(rows)
+    const userIds = [...new Set(rows.map((row) => row.user_id).filter(Boolean))]
+    const { data: profileRows } = userIds.length
+      ? await supabase.from('profiles').select('id, name, email, phone, admission_status').in('id', userIds)
+      : { data: [] }
+    setProfilesById(Object.fromEntries((profileRows ?? []).map((profile) => [profile.id, profile])))
+    setDrafts(Object.fromEntries(rows.map((row, index) => [row.id, {
+      cohort: row.cohort_name || LONG_COURSE_COHORTS[0].name,
+      batch: row.batch_name || LONG_COURSE_BATCHES[index % LONG_COURSE_BATCHES.length],
+    }])))
+    setLoading(false)
+  }
+
+  async function decideEnrollment(enrollment, status) {
+    const draft = drafts[enrollment.id] ?? {}
+    const payload = status === 'active'
+      ? {
+        status: 'active',
+        cohort_name: draft.cohort || LONG_COURSE_COHORTS[0].name,
+        batch_name: draft.batch || LONG_COURSE_BATCHES[0],
+        decision_at: new Date().toISOString(),
+      }
+      : { status: 'rejected', decision_at: new Date().toISOString() }
+
+    const { error } = await supabase.from('enrollments').update(payload).eq('id', enrollment.id)
+    if (error) {
+      setMessage(`${error.message}. Run the long-course management SQL if cohort/batch fields are missing.`)
+      return
+    }
+    await loadLongCourseManagement()
+    setMessage(status === 'active' ? 'Enrollment approved and student assigned.' : 'Enrollment rejected.')
+  }
+
+  async function saveAssignment(enrollment) {
+    const draft = drafts[enrollment.id] ?? {}
+    const { error } = await supabase.from('enrollments').update({
+      cohort_name: draft.cohort || LONG_COURSE_COHORTS[0].name,
+      batch_name: draft.batch || LONG_COURSE_BATCHES[0],
+    }).eq('id', enrollment.id)
+    if (error) {
+      setMessage(`${error.message}. Run the long-course management SQL if cohort/batch fields are missing.`)
+      return
+    }
+    await loadLongCourseManagement()
+    setMessage('Student cohort assignment saved.')
+  }
+
+  function updateSession(moduleIndex, sessionIndex, field, value) {
+    setModules((current) => current.map((module, index) => {
+      if (index !== moduleIndex) return module
+      return {
+        ...module,
+        sessions: module.sessions.map((session, innerIndex) => (
+          innerIndex === sessionIndex ? { ...session, [field]: value } : session
+        )),
+      }
+    }))
+  }
+
+  async function saveLiveLinks() {
+    if (!selectedCourse) return
+    setSaving(true)
+    setMessage('')
+    const cleanedModules = normalizeLongCourseModules(modules).map((module) => ({
+      title: module.title,
+      description: module.description,
+      planned_sessions: Number(module.planned_sessions) || module.sessions.length,
+      sessions: module.sessions.map((session) => ({
+        title: session.title,
+        status: session.status || 'upcoming',
+        starts_at: session.starts_at || '',
+        zoom_url: session.zoom_url || '',
+        recording_url: session.recording_url || '',
+      })),
+    }))
+
+    const { error } = await saveExtendedCourseFields(selectedCourse.id, { long_course_structure: { modules: cleanedModules } })
+    if (error) {
+      setMessage(error.message)
+    } else {
+      setLongCourses((current) => current.map((course) => (
+        course.id === selectedCourse.id ? { ...course, long_course_structure: { modules: cleanedModules } } : course
+      )))
+      setMessage('Live and recording links saved.')
+    }
+    setSaving(false)
+  }
+
+  const visibleEnrollments = enrollments.filter((row) => row.course_id === selectedCourse?.id)
+  const pending = visibleEnrollments.filter((row) => row.status === 'pending')
+  const active = visibleEnrollments.filter((row) => row.status === 'active' || row.status === 'completed')
+
+  if (loading) return <div className="py-16 text-center text-sm text-ink-muted">Loading long course management...</div>
+
+  return (
+    <div className="space-y-6">
+      <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
+        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
+          <div>
+            <p className="text-[12px] font-semibold uppercase tracking-[0.18em] text-primary">Cohorts and batches</p>
+            <h2 className="mt-2 font-display text-2xl font-semibold">Long Course Management</h2>
+            <p className="mt-2 text-sm text-ink-muted">Approve enrollment requests, place students into cohorts and batches, and attach live/recorded links for long-course sessions.</p>
+          </div>
+          {longCourses.length > 1 && (
+            <select value={selectedCourseId} onChange={(e) => setSelectedCourseId(e.target.value)} className="rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-primary">
+              {longCourses.map((course) => <option key={course.id} value={course.id}>{course.title}</option>)}
+            </select>
+          )}
+        </div>
+        {!longCourses.length && (
+          <div className="mt-5 rounded-xl border border-dashed border-border bg-surface-warm p-6 text-center">
+            <p className="font-display text-lg font-semibold">No long course exists yet.</p>
+            <Link to="/admin/courses/new?type=long"><Button className="mt-4">Create long course</Button></Link>
+          </div>
+        )}
+      </section>
+
+      {selectedCourse && (
+        <>
+          <section className="grid gap-4 md:grid-cols-2">
+            {LONG_COURSE_COHORTS.map((cohort) => {
+              const cohortStudents = active.filter((row) => row.cohort_name === cohort.name)
+              return (
+                <article key={cohort.name} className="rounded-xl border border-border bg-surface p-4 shadow-sm">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">{cohort.starts}</p>
+                  <h3 className="mt-1 font-display text-xl font-semibold">{cohort.name}</h3>
+                  <div className="mt-4 grid grid-cols-2 gap-3">
+                    {LONG_COURSE_BATCHES.map((batch) => (
+                      <div key={batch} className="rounded-lg border border-border bg-surface-warm p-3">
+                        <p className="text-xs font-semibold">{batch}</p>
+                        <p className="mt-1 text-2xl font-semibold text-primary">{cohortStudents.filter((row) => row.batch_name === batch).length}</p>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              )
+            })}
+          </section>
+
+          <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[12px] font-semibold uppercase tracking-[0.18em] text-primary">Requests</p>
+                <h2 className="mt-1 font-display text-xl font-semibold">Enrollment approvals</h2>
+              </div>
+              <Badge>{pending.length} pending</Badge>
+            </div>
+            <div className="space-y-3">
+              {pending.length ? pending.map((row, index) => {
+                const profile = profilesById[row.user_id] ?? {}
+                const draft = drafts[row.id] ?? { cohort: LONG_COURSE_COHORTS[0].name, batch: LONG_COURSE_BATCHES[index % 2] }
+                return (
+                  <div key={row.id} className="grid gap-3 rounded-xl border border-border bg-surface-warm p-3 lg:grid-cols-[1fr_180px_120px_auto] lg:items-center">
+                    <div>
+                      <p className="font-semibold">{profile.name ?? profile.email ?? 'Student'}</p>
+                      <p className="text-sm text-ink-muted">{profile.email}</p>
+                    </div>
+                    <select value={draft.cohort} onChange={(e) => setDrafts((current) => ({ ...current, [row.id]: { ...draft, cohort: e.target.value } }))} className="rounded-lg border border-border bg-surface px-3 py-2 text-sm">
+                      {LONG_COURSE_COHORTS.map((cohort) => <option key={cohort.name} value={cohort.name}>{cohort.name}</option>)}
+                    </select>
+                    <select value={draft.batch} onChange={(e) => setDrafts((current) => ({ ...current, [row.id]: { ...draft, batch: e.target.value } }))} className="rounded-lg border border-border bg-surface px-3 py-2 text-sm">
+                      {LONG_COURSE_BATCHES.map((batch) => <option key={batch} value={batch}>{batch}</option>)}
+                    </select>
+                    <div className="flex gap-2">
+                      <Button type="button" onClick={() => decideEnrollment(row, 'active')}>Accept</Button>
+                      <Button type="button" variant="secondary" onClick={() => decideEnrollment(row, 'rejected')}>Reject</Button>
+                    </div>
+                  </div>
+                )
+              }) : (
+                <div className="rounded-xl border border-dashed border-border bg-surface-warm p-6 text-center text-sm text-ink-muted">No pending enrollment requests.</div>
+              )}
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
+            <h2 className="font-display text-xl font-semibold">Enrolled students</h2>
+            <div className="mt-4 space-y-3">
+              {active.length ? active.map((row) => {
+                const profile = profilesById[row.user_id] ?? {}
+                const draft = drafts[row.id] ?? { cohort: row.cohort_name || LONG_COURSE_COHORTS[0].name, batch: row.batch_name || LONG_COURSE_BATCHES[0] }
+                return (
+                  <div key={row.id} className="grid gap-3 rounded-xl border border-border bg-surface-warm p-3 lg:grid-cols-[1fr_180px_120px_auto] lg:items-center">
+                    <div>
+                      <p className="font-semibold">{profile.name ?? profile.email ?? 'Student'}</p>
+                      <p className="text-sm text-ink-muted">{profile.email}</p>
+                    </div>
+                    <select value={draft.cohort} onChange={(e) => setDrafts((current) => ({ ...current, [row.id]: { ...draft, cohort: e.target.value } }))} className="rounded-lg border border-border bg-surface px-3 py-2 text-sm">
+                      {LONG_COURSE_COHORTS.map((cohort) => <option key={cohort.name} value={cohort.name}>{cohort.name}</option>)}
+                    </select>
+                    <select value={draft.batch} onChange={(e) => setDrafts((current) => ({ ...current, [row.id]: { ...draft, batch: e.target.value } }))} className="rounded-lg border border-border bg-surface px-3 py-2 text-sm">
+                      {LONG_COURSE_BATCHES.map((batch) => <option key={batch} value={batch}>{batch}</option>)}
+                    </select>
+                    <Button type="button" variant="secondary" onClick={() => saveAssignment(row)}>Save</Button>
+                  </div>
+                )
+              }) : (
+                <div className="rounded-xl border border-dashed border-border bg-surface-warm p-6 text-center text-sm text-ink-muted">No enrolled students yet.</div>
+              )}
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
+            <div className="mb-5 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[12px] font-semibold uppercase tracking-[0.18em] text-primary">Learning links</p>
+                <h2 className="mt-1 font-display text-xl font-semibold">Live and recorded sessions</h2>
+              </div>
+              <Button type="button" onClick={saveLiveLinks} disabled={saving}>{saving ? 'Saving...' : 'Save links'}</Button>
+            </div>
+            <div className="space-y-4">
+              {modules.length ? modules.map((module, moduleIndex) => (
+                <article key={`${moduleIndex}-${module.title}`} className="rounded-xl border border-border bg-surface-warm p-4">
+                  <h3 className="font-display text-lg font-semibold">{module.title}</h3>
+                  <div className="mt-3 space-y-3">
+                    {module.sessions.map((session, sessionIndex) => (
+                      <div key={`${moduleIndex}-${sessionIndex}`} className="rounded-lg border border-border bg-surface p-3">
+                        <p className="text-sm font-semibold">{session.title || `Session ${sessionIndex + 1}`}</p>
+                        <div className="mt-3 grid gap-3 md:grid-cols-2">
+                          <select value={session.status || 'upcoming'} onChange={(e) => updateSession(moduleIndex, sessionIndex, 'status', e.target.value)} className="rounded-lg border border-border bg-surface px-3 py-2 text-sm">
+                            <option value="upcoming">Upcoming</option>
+                            <option value="concluded">Concluded</option>
+                          </select>
+                          <input type="datetime-local" value={session.starts_at || ''} onChange={(e) => updateSession(moduleIndex, sessionIndex, 'starts_at', e.target.value)} className="rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
+                          <input value={session.zoom_url || ''} onChange={(e) => updateSession(moduleIndex, sessionIndex, 'zoom_url', e.target.value)} placeholder="Zoom link for upcoming session" className="rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
+                          <input value={session.recording_url || ''} onChange={(e) => updateSession(moduleIndex, sessionIndex, 'recording_url', e.target.value)} placeholder="YouTube recording link after conclusion" className="rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              )) : (
+                <div className="rounded-xl border border-dashed border-border bg-surface-warm p-6 text-center text-sm text-ink-muted">Add modules and sessions from the long-course editor first.</div>
+              )}
+            </div>
+          </section>
+        </>
+      )}
+
+      {message && <p className="rounded-xl border border-primary-soft bg-primary-soft/30 p-3 text-sm font-semibold text-ink-muted">{message}</p>}
+    </div>
   )
 }
 
