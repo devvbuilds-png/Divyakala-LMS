@@ -241,6 +241,7 @@ Admin now has `/admin/long-course-management` in the sidebar.
 Implemented demo flow:
 - Student long-course detail `Request Enrollment` creates a pending `enrollments` row instead of instantly enrolling.
 - Admin sees pending requests in Long Course Management.
+- Admin can add course-specific cohorts/term groups in Long Course Management.
 - Admin can accept/reject requests.
 - Accept assigns the student to a cohort and batch.
 - Enrolled long-course students appear in My Learning under the Long courses tab.
@@ -248,7 +249,7 @@ Implemented demo flow:
 - If a long-course session is `upcoming`, the lesson screen shows date/time and Zoom link.
 - If a long-course session is `concluded`, the lesson screen uses the saved YouTube/recording URL.
 
-Run `supabase-long-course-management.sql` in Supabase SQL Editor before demoing approvals so `enrollments.cohort_name`, `batch_name`, `requested_at`, and `decision_at` exist.
+Run `supabase-long-course-management.sql` in Supabase SQL Editor before demoing approvals so `enrollments.cohort_name`, `batch_name`, `requested_at`, `decision_at`, and `long_course_cohorts` exist.
 
 ### Seeded long-course demo data
 

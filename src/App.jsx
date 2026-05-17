@@ -246,7 +246,7 @@ function flattenLongCourseSessions(course) {
   })))
 }
 
-const LONG_COURSE_COHORTS = [
+const DEFAULT_LONG_COURSE_COHORTS = [
   { name: 'October 2024 Cohort', starts: 'October 2024' },
   { name: 'February 2025 Cohort', starts: 'February 2025' },
 ]
@@ -5171,6 +5171,9 @@ function CourseAdminCard({ course, enrollments = [], onStatusChange, onDelete })
 function AdminLongCourseManagement() {
   const [longCourses, setLongCourses] = useState([])
   const [selectedCourseId, setSelectedCourseId] = useState('')
+  const [cohorts, setCohorts] = useState([])
+  const [newCohortName, setNewCohortName] = useState('')
+  const [newCohortStarts, setNewCohortStarts] = useState('')
   const [enrollments, setEnrollments] = useState([])
   const [profilesById, setProfilesById] = useState({})
   const [drafts, setDrafts] = useState({})
@@ -5180,6 +5183,13 @@ function AdminLongCourseManagement() {
   const [message, setMessage] = useState('')
 
   const selectedCourse = longCourses.find((course) => course.id === selectedCourseId) ?? longCourses[0] ?? null
+  const selectedCohorts = selectedCourse
+    ? cohorts.filter((cohort) => cohort.course_id === selectedCourse.id)
+    : []
+  const cohortOptions = selectedCohorts.length
+    ? selectedCohorts
+    : DEFAULT_LONG_COURSE_COHORTS.map((cohort) => ({ ...cohort, starts_label: cohort.starts }))
+  const defaultCohortName = cohortOptions[0]?.name ?? 'New Cohort'
 
   useEffect(() => { loadLongCourseManagement() }, [])
 
@@ -5199,6 +5209,17 @@ function AdminLongCourseManagement() {
     const courses = courseRows ?? []
     setLongCourses(courses)
     setSelectedCourseId((current) => current || courses[0]?.id || '')
+
+    const { data: cohortRows, error: cohortError } = courses.length
+      ? await supabase
+        .from('long_course_cohorts')
+        .select('*')
+        .in('course_id', courses.map((course) => course.id))
+        .order('created_at', { ascending: true })
+      : { data: [], error: null }
+
+    const nextCohorts = cohortRows ?? []
+    setCohorts(cohortError ? [] : nextCohorts)
 
     if (!courses.length) {
       setEnrollments([])
@@ -5227,9 +5248,12 @@ function AdminLongCourseManagement() {
       : { data: [] }
     setProfilesById(Object.fromEntries((profileRows ?? []).map((profile) => [profile.id, profile])))
     setDrafts(Object.fromEntries(rows.map((row, index) => [row.id, {
-      cohort: row.cohort_name || LONG_COURSE_COHORTS[0].name,
+      cohort: row.cohort_name || nextCohorts.find((cohort) => cohort.course_id === row.course_id)?.name || DEFAULT_LONG_COURSE_COHORTS[0].name,
       batch: row.batch_name || LONG_COURSE_BATCHES[index % LONG_COURSE_BATCHES.length],
     }])))
+    if (cohortError) {
+      setMessage('Using default cohorts. Run the long-course management SQL to create editable cohorts.')
+    }
     setLoading(false)
   }
 
@@ -5238,7 +5262,7 @@ function AdminLongCourseManagement() {
     const payload = status === 'active'
       ? {
         status: 'active',
-        cohort_name: draft.cohort || LONG_COURSE_COHORTS[0].name,
+        cohort_name: draft.cohort || defaultCohortName,
         batch_name: draft.batch || LONG_COURSE_BATCHES[0],
         decision_at: new Date().toISOString(),
       }
@@ -5256,7 +5280,7 @@ function AdminLongCourseManagement() {
   async function saveAssignment(enrollment) {
     const draft = drafts[enrollment.id] ?? {}
     const { error } = await supabase.from('enrollments').update({
-      cohort_name: draft.cohort || LONG_COURSE_COHORTS[0].name,
+      cohort_name: draft.cohort || defaultCohortName,
       batch_name: draft.batch || LONG_COURSE_BATCHES[0],
     }).eq('id', enrollment.id)
     if (error) {
@@ -5265,6 +5289,33 @@ function AdminLongCourseManagement() {
     }
     await loadLongCourseManagement()
     setMessage('Student cohort assignment saved.')
+  }
+
+  async function addCohort(e) {
+    e.preventDefault()
+    if (!selectedCourse || !newCohortName.trim()) return
+
+    const payload = {
+      course_id: selectedCourse.id,
+      name: newCohortName.trim(),
+      starts_label: newCohortStarts.trim() || null,
+    }
+
+    const { data, error } = await supabase
+      .from('long_course_cohorts')
+      .insert(payload)
+      .select()
+      .single()
+
+    if (error) {
+      setMessage(`${error.message}. Run the updated long-course management SQL to enable custom cohorts.`)
+      return
+    }
+
+    setCohorts((current) => [...current, data])
+    setNewCohortName('')
+    setNewCohortStarts('')
+    setMessage('Cohort added.')
   }
 
   function updateSession(moduleIndex, sessionIndex, field, value) {
@@ -5340,11 +5391,11 @@ function AdminLongCourseManagement() {
       {selectedCourse && (
         <>
           <section className="grid gap-4 md:grid-cols-2">
-            {LONG_COURSE_COHORTS.map((cohort) => {
+            {cohortOptions.map((cohort) => {
               const cohortStudents = active.filter((row) => row.cohort_name === cohort.name)
               return (
                 <article key={cohort.name} className="rounded-xl border border-border bg-surface p-4 shadow-sm">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">{cohort.starts}</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">{cohort.starts_label || cohort.starts || 'Cohort'}</p>
                   <h3 className="mt-1 font-display text-xl font-semibold">{cohort.name}</h3>
                   <div className="mt-4 grid grid-cols-2 gap-3">
                     {LONG_COURSE_BATCHES.map((batch) => (
@@ -5357,6 +5408,15 @@ function AdminLongCourseManagement() {
                 </article>
               )
             })}
+            <form onSubmit={addCohort} className="rounded-xl border border-dashed border-border bg-surface-warm p-4 shadow-sm">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">Add cohort</p>
+              <h3 className="mt-1 font-display text-xl font-semibold">New term group</h3>
+              <div className="mt-4 grid gap-3">
+                <input value={newCohortName} onChange={(e) => setNewCohortName(e.target.value)} placeholder="October 2026 Cohort" className="rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-primary" />
+                <input value={newCohortStarts} onChange={(e) => setNewCohortStarts(e.target.value)} placeholder="Starts label, e.g. October 2026" className="rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-primary" />
+                <Button type="submit" disabled={!newCohortName.trim()}>Add cohort</Button>
+              </div>
+            </form>
           </section>
 
           <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
@@ -5370,7 +5430,7 @@ function AdminLongCourseManagement() {
             <div className="space-y-3">
               {pending.length ? pending.map((row, index) => {
                 const profile = profilesById[row.user_id] ?? {}
-                const draft = drafts[row.id] ?? { cohort: LONG_COURSE_COHORTS[0].name, batch: LONG_COURSE_BATCHES[index % 2] }
+                const draft = drafts[row.id] ?? { cohort: defaultCohortName, batch: LONG_COURSE_BATCHES[index % 2] }
                 return (
                   <div key={row.id} className="grid gap-3 rounded-xl border border-border bg-surface-warm p-3 lg:grid-cols-[1fr_180px_120px_auto] lg:items-center">
                     <div>
@@ -5378,7 +5438,7 @@ function AdminLongCourseManagement() {
                       <p className="text-sm text-ink-muted">{profile.email}</p>
                     </div>
                     <select value={draft.cohort} onChange={(e) => setDrafts((current) => ({ ...current, [row.id]: { ...draft, cohort: e.target.value } }))} className="rounded-lg border border-border bg-surface px-3 py-2 text-sm">
-                      {LONG_COURSE_COHORTS.map((cohort) => <option key={cohort.name} value={cohort.name}>{cohort.name}</option>)}
+                      {cohortOptions.map((cohort) => <option key={cohort.name} value={cohort.name}>{cohort.name}</option>)}
                     </select>
                     <select value={draft.batch} onChange={(e) => setDrafts((current) => ({ ...current, [row.id]: { ...draft, batch: e.target.value } }))} className="rounded-lg border border-border bg-surface px-3 py-2 text-sm">
                       {LONG_COURSE_BATCHES.map((batch) => <option key={batch} value={batch}>{batch}</option>)}
@@ -5400,7 +5460,7 @@ function AdminLongCourseManagement() {
             <div className="mt-4 space-y-3">
               {active.length ? active.map((row) => {
                 const profile = profilesById[row.user_id] ?? {}
-                const draft = drafts[row.id] ?? { cohort: row.cohort_name || LONG_COURSE_COHORTS[0].name, batch: row.batch_name || LONG_COURSE_BATCHES[0] }
+                const draft = drafts[row.id] ?? { cohort: row.cohort_name || defaultCohortName, batch: row.batch_name || LONG_COURSE_BATCHES[0] }
                 return (
                   <div key={row.id} className="grid gap-3 rounded-xl border border-border bg-surface-warm p-3 lg:grid-cols-[1fr_180px_120px_auto] lg:items-center">
                     <div>
@@ -5408,7 +5468,7 @@ function AdminLongCourseManagement() {
                       <p className="text-sm text-ink-muted">{profile.email}</p>
                     </div>
                     <select value={draft.cohort} onChange={(e) => setDrafts((current) => ({ ...current, [row.id]: { ...draft, cohort: e.target.value } }))} className="rounded-lg border border-border bg-surface px-3 py-2 text-sm">
-                      {LONG_COURSE_COHORTS.map((cohort) => <option key={cohort.name} value={cohort.name}>{cohort.name}</option>)}
+                      {cohortOptions.map((cohort) => <option key={cohort.name} value={cohort.name}>{cohort.name}</option>)}
                     </select>
                     <select value={draft.batch} onChange={(e) => setDrafts((current) => ({ ...current, [row.id]: { ...draft, batch: e.target.value } }))} className="rounded-lg border border-border bg-surface px-3 py-2 text-sm">
                       {LONG_COURSE_BATCHES.map((batch) => <option key={batch} value={batch}>{batch}</option>)}
