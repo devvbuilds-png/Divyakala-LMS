@@ -2239,7 +2239,7 @@ function LongCourseDetail({
   const liveFormatLabel = 'Live sessions + recordings'
   const enrollmentLabel = 'By request'
   const requestLabel = enrollment?.status === 'pending'
-    ? 'Request Pending'
+    ? 'Request Sent'
     : enrollment?.status === 'active' || enrollment?.status === 'completed'
       ? 'Continue Learning'
       : enrollment?.status === 'rejected'
