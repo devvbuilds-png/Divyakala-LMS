@@ -192,6 +192,43 @@ const longCourseBlueprint = {
   ],
 }
 
+function getDefaultLongCourseModules() {
+  return longCourseBlueprint.modules.map((module) => ({
+    title: module.title,
+    description: module.description,
+    planned_sessions: module.sessions.length,
+    sessions: module.sessions.map((title) => ({ title })),
+  }))
+}
+
+function normalizeLongCourseModules(value) {
+  const rawModules = Array.isArray(value?.modules) ? value.modules : Array.isArray(value) ? value : null
+  if (!rawModules?.length) return getDefaultLongCourseModules()
+
+  return rawModules.map((module, index) => {
+    const sessions = Array.isArray(module.sessions) ? module.sessions : []
+    const normalizedSessions = sessions.map((session) => ({
+      title: typeof session === 'string' ? session : session?.title ?? '',
+    }))
+
+    return {
+      title: module.title ?? `Module ${index + 1}`,
+      description: module.description ?? '',
+      planned_sessions: Number(module.planned_sessions ?? module.plannedSessions ?? normalizedSessions.length) || 0,
+      sessions: normalizedSessions,
+    }
+  })
+}
+
+function toCourseStructureModules(modules) {
+  return normalizeLongCourseModules(modules).map((module) => ({
+    title: module.title,
+    description: module.description,
+    planned_sessions: module.planned_sessions,
+    sessions: module.sessions.map((session) => session.title).filter(Boolean),
+  }))
+}
+
 const workshops = [
   { title: 'Iconography Q&A: Mudras & Their Meanings', date: 'Saturday, 14 December 2025', time: '7:00 PM IST', day: '14', month: 'DEC', duration: '1 hour', description: 'Bring your questions about hand gestures and their symbolism. Drdha will draw examples live and answer questions.' },
   { title: 'Live Painting Demo: Watercolor Techniques for Devotional Art', date: 'Thursday, 8 January 2026', time: '7:00 PM IST', day: '08', month: 'JAN', duration: '90 min', description: 'A gentle study of transparent color, devotional restraint, and luminous surfaces.' },
@@ -2100,7 +2137,9 @@ function LongCourseDetail({
   setOpen,
 }) {
   const [openModule, setOpenModule] = useState(0)
-  const modules = displayCourse.modules ?? longCourseBlueprint.modules
+  const modules = displayCourse.long_course_structure
+    ? toCourseStructureModules(displayCourse.long_course_structure)
+    : displayCourse.modules ?? longCourseBlueprint.modules
   const totalSessions = modules.reduce((sum, module) => sum + module.sessions.length, 0)
   const pill = 'rounded-full bg-[#ede0ba] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#9a7a3a]'
   const eyebrow = 'text-[10px] font-semibold uppercase tracking-[0.26em] text-[#9a7a3a]'
@@ -2200,7 +2239,7 @@ function LongCourseDetail({
                         </div>
                         <div>
                           <h3 className="font-display text-[1.05rem] font-semibold leading-snug text-[#1a1208]">{module.title}</h3>
-                          <p className="mt-1 text-[12px] text-[#9a7a3a]">{module.sessions.length} sessions</p>
+                          <p className="mt-1 text-[12px] text-[#9a7a3a]">{module.planned_sessions ?? module.sessions.length} planned sessions</p>
                         </div>
                       </div>
                       <ChevronRight size={16} className={`mt-1 shrink-0 text-[#c5b090] transition-transform ${expanded ? 'rotate-90' : ''}`} />
@@ -2208,14 +2247,18 @@ function LongCourseDetail({
                     {expanded && (
                       <div className="border-t border-[#e8d8a8] px-4 pb-5 pt-4">
                         <p className="text-[13px] leading-[1.8] text-[#7a6040]">{module.description}</p>
-                        <ol className="mt-4 space-y-2">
-                          {module.sessions.map((sessionTitle, sessionIndex) => (
-                            <li key={sessionTitle} className="flex gap-3 rounded-lg border border-[#eadbb5] bg-white/55 px-3 py-2.5">
-                              <span className="mt-0.5 text-[11px] font-semibold text-[#b8861a]">{String(sessionIndex + 1).padStart(2, '0')}</span>
-                              <span className="text-[13px] leading-6 text-[#1a1208]">{sessionTitle}</span>
-                            </li>
-                          ))}
-                        </ol>
+                        {module.sessions.length ? (
+                          <ol className="mt-4 space-y-2">
+                            {module.sessions.map((sessionTitle, sessionIndex) => (
+                              <li key={sessionTitle} className="flex gap-3 rounded-lg border border-[#eadbb5] bg-white/55 px-3 py-2.5">
+                                <span className="mt-0.5 text-[11px] font-semibold text-[#b8861a]">{String(sessionIndex + 1).padStart(2, '0')}</span>
+                                <span className="text-[13px] leading-6 text-[#1a1208]">{sessionTitle}</span>
+                              </li>
+                            ))}
+                          </ol>
+                        ) : (
+                          <p className="mt-4 rounded-lg border border-dashed border-[#eadbb5] bg-white/45 px-3 py-3 text-[12px] text-[#9a7a3a]">Session names will be added soon.</p>
+                        )}
                       </div>
                     )}
                   </article>
@@ -4371,6 +4414,7 @@ function AdminCourseEditor() {
   const [courseStructureSummary, setCourseStructureSummary] = useState('')
   const [howLearningWorks, setHowLearningWorks] = useState('')
   const [timelineCommitment, setTimelineCommitment] = useState('')
+  const [longCourseModules, setLongCourseModules] = useState(() => getDefaultLongCourseModules())
 
   useEffect(() => {
     async function loadCourseEditor() {
@@ -4390,6 +4434,7 @@ function AdminCourseEditor() {
           setWhoIsThisFor((current) => current || longCourseBlueprint.who_is_this_for)
           setMaterialsNeeded((current) => current || longCourseBlueprint.materials_needed)
           setAccessDetails((current) => current || longCourseBlueprint.access_details)
+          setLongCourseModules((current) => current.length ? current : getDefaultLongCourseModules())
         }
         setLoading(false)
         return
@@ -4416,6 +4461,7 @@ function AdminCourseEditor() {
         setCourseStructureSummary(courseData.course_structure_summary ?? '')
         setHowLearningWorks(courseData.how_learning_works ?? '')
         setTimelineCommitment(courseData.timeline_commitment ?? '')
+        setLongCourseModules(normalizeLongCourseModules(courseData.long_course_structure))
         setCourseType(courseData.course_type === 'long' ? 'long' : 'short')
       }
 
@@ -4469,16 +4515,24 @@ function AdminCourseEditor() {
     if (error) {
       setFormError(error.message)
     } else {
+      const cleanedModules = normalizeLongCourseModules(longCourseModules).map((module) => ({
+        title: module.title.trim(),
+        description: module.description.trim(),
+        planned_sessions: Number(module.planned_sessions) || 0,
+        sessions: module.sessions.map((session) => ({ title: session.title.trim() })).filter((session) => session.title),
+      })).filter((module) => module.title || module.description || module.planned_sessions || module.sessions.length)
+      const plannedSessionCount = cleanedModules.reduce((sum, module) => sum + (Number(module.planned_sessions) || module.sessions.length), 0)
       const extendedFields = {
         trailer_url: trailerUrl.trim() || null,
         who_is_this_for: whoIsThisFor.trim() || null,
         materials_needed: materialsNeeded.trim() || null,
         access_details: accessDetails.trim() || null,
-        module_count: moduleCountLabel ? parseInt(moduleCountLabel) : null,
-        session_count: sessionCountLabel ? parseInt(sessionCountLabel) : null,
+        module_count: moduleCountLabel ? parseInt(moduleCountLabel) : cleanedModules.length || null,
+        session_count: sessionCountLabel ? parseInt(sessionCountLabel) : plannedSessionCount || null,
         course_structure_summary: courseStructureSummary.trim() || null,
         how_learning_works: howLearningWorks.trim() || null,
         timeline_commitment: timelineCommitment.trim() || null,
+        long_course_structure: courseType === 'long' ? { modules: cleanedModules } : null,
       }
       const { error: extendedError } = await saveExtendedCourseFields(data.id, extendedFields)
 
@@ -4726,19 +4780,7 @@ function AdminCourseEditor() {
         </AdminEditor>
 
         {isLongCourseEditor ? (
-          <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
-            <div>
-              <p className="text-[12px] font-semibold uppercase tracking-[0.18em] text-primary">Next step</p>
-              <h2 className="mt-2 font-display text-2xl font-semibold">Modules and live sessions</h2>
-              <p className="mt-2 text-sm leading-7 text-ink-muted">
-                This long-course editor now captures the student-facing course detail page. The module builder and live-session builder will be added next, with each session belonging to a module and carrying live class, recording, reference, and resource fields.
-              </p>
-            </div>
-            <div className="mt-5 rounded-xl border border-dashed border-border bg-surface-warm p-5">
-              <p className="font-display text-lg font-semibold">Not wired yet.</p>
-              <p className="mt-1 text-sm text-ink-muted">For now, save the long course details first. We will build module/session creation separately.</p>
-            </div>
-          </section>
+          <LongCourseModulePlanner modules={longCourseModules} setModules={setLongCourseModules} />
         ) : (
         <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
           <div className="mb-5 flex items-center justify-between gap-3">
@@ -4806,6 +4848,152 @@ function AdminCourseEditor() {
         )}
       </div>
     </div>
+  )
+}
+
+function LongCourseModulePlanner({ modules, setModules }) {
+  function addModule() {
+    setModules((current) => [
+      ...current,
+      {
+        title: `Module ${current.length + 1}`,
+        description: '',
+        planned_sessions: 0,
+        sessions: [],
+      },
+    ])
+  }
+
+  function updateModule(moduleIndex, key, value) {
+    setModules((current) => current.map((module, index) => (
+      index === moduleIndex ? { ...module, [key]: value } : module
+    )))
+  }
+
+  function removeModule(moduleIndex) {
+    setModules((current) => current.filter((_, index) => index !== moduleIndex))
+  }
+
+  function addSession(moduleIndex) {
+    setModules((current) => current.map((module, index) => {
+      if (index !== moduleIndex) return module
+      return {
+        ...module,
+        sessions: [...module.sessions, { title: '' }],
+        planned_sessions: Math.max(Number(module.planned_sessions) || 0, module.sessions.length + 1),
+      }
+    }))
+  }
+
+  function updateSession(moduleIndex, sessionIndex, value) {
+    setModules((current) => current.map((module, index) => {
+      if (index !== moduleIndex) return module
+      return {
+        ...module,
+        sessions: module.sessions.map((session, innerIndex) => (
+          innerIndex === sessionIndex ? { ...session, title: value } : session
+        )),
+      }
+    }))
+  }
+
+  function removeSession(moduleIndex, sessionIndex) {
+    setModules((current) => current.map((module, index) => {
+      if (index !== moduleIndex) return module
+      return {
+        ...module,
+        sessions: module.sessions.filter((_, innerIndex) => innerIndex !== sessionIndex),
+      }
+    }))
+  }
+
+  return (
+    <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
+      <div className="mb-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+        <div>
+          <p className="text-[12px] font-semibold uppercase tracking-[0.18em] text-primary">Course structure</p>
+          <h2 className="mt-2 font-display text-2xl font-semibold">Modules and planned live sessions</h2>
+          <p className="mt-2 text-sm leading-7 text-ink-muted">
+            Create the module hierarchy students will see on the long-course detail page. Session links, recordings, resources, and dates come later.
+          </p>
+        </div>
+        <Button type="button" onClick={addModule}>
+          <Plus className="mr-2 inline" size={15} />
+          Add module
+        </Button>
+      </div>
+
+      <div className="space-y-4">
+        {modules.length ? modules.map((module, moduleIndex) => (
+          <article key={`${moduleIndex}-${module.title}`} className="rounded-xl border border-border bg-surface-warm p-4">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">Module {moduleIndex + 1}</p>
+                <p className="mt-1 text-xs text-ink-muted">{module.sessions.length} named sessions</p>
+              </div>
+              <IconButton icon={Trash2} label="Remove module" onClick={() => removeModule(moduleIndex)} />
+            </div>
+
+            <div className="grid gap-4">
+              <Input label="Module title" value={module.title} onChange={(e) => updateModule(moduleIndex, 'title', e.target.value)} />
+              <label className="block">
+                <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-ink-muted">Module description</span>
+                <textarea
+                  className="min-h-24 w-full rounded-lg border border-border bg-surface px-4 py-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
+                  placeholder="What this module covers and how it fits into the long course."
+                  value={module.description}
+                  onChange={(e) => updateModule(moduleIndex, 'description', e.target.value)}
+                />
+              </label>
+              <Input
+                label="Potential live sessions"
+                type="number"
+                min="0"
+                value={module.planned_sessions}
+                onChange={(e) => updateModule(moduleIndex, 'planned_sessions', e.target.value)}
+              />
+
+              <div className="rounded-xl border border-border bg-surface p-3">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Session names</p>
+                  <Button type="button" variant="secondary" onClick={() => addSession(moduleIndex)}>
+                    <Plus className="mr-2 inline" size={14} />
+                    Add session
+                  </Button>
+                </div>
+                <div className="space-y-2">
+                  {module.sessions.length ? module.sessions.map((session, sessionIndex) => (
+                    <div key={sessionIndex} className="flex items-center gap-2">
+                      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary-soft text-xs font-semibold text-primary">
+                        {sessionIndex + 1}
+                      </span>
+                      <input
+                        className="min-w-0 flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
+                        placeholder={`Optional session ${sessionIndex + 1} name`}
+                        value={session.title}
+                        onChange={(e) => updateSession(moduleIndex, sessionIndex, e.target.value)}
+                      />
+                      <IconButton icon={Trash2} label="Remove session" onClick={() => removeSession(moduleIndex, sessionIndex)} />
+                    </div>
+                  )) : (
+                    <div className="rounded-lg border border-dashed border-border bg-surface-warm px-4 py-5 text-center">
+                      <p className="text-sm font-semibold">No session names yet.</p>
+                      <p className="mt-1 text-xs text-ink-muted">You can keep only the planned session count, or add names as the module plan becomes clear.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </article>
+        )) : (
+          <div className="rounded-xl border border-dashed border-border bg-surface-warm px-4 py-8 text-center">
+            <p className="font-display text-lg font-semibold">No modules yet.</p>
+            <p className="mt-1 text-sm text-ink-muted">Add the first module to start shaping the long-course structure.</p>
+            <Button type="button" className="mt-4" onClick={addModule}>Add module</Button>
+          </div>
+        )}
+      </div>
+    </section>
   )
 }
 
