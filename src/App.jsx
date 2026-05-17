@@ -1160,7 +1160,7 @@ function Auth() {
               )}
               <button
                 type="button"
-                className="mt-4 text-sm text-ink-muted underline underline-offset-2 hover:text-primary"
+                className="mt-4 block w-full text-center text-sm text-ink-muted underline underline-offset-2 hover:text-primary"
                 onClick={() => { setUsePassword(true); setOtpSent(false); setError('') }}
               >
                 Sign in with password instead
@@ -1179,7 +1179,7 @@ function Auth() {
               </form>
               <button
                 type="button"
-                className="mt-4 text-sm text-ink-muted underline underline-offset-2 hover:text-primary"
+                className="mt-4 block w-full text-center text-sm text-ink-muted underline underline-offset-2 hover:text-primary"
                 onClick={() => { setUsePassword(false); setError('') }}
               >
                 Use magic link instead
@@ -1187,7 +1187,7 @@ function Auth() {
             </>
           )}
 
-          <Link className="mt-5 inline-block text-sm font-semibold text-primary" to={isSignUp ? '/auth/sign-in' : '/auth/sign-up'}>
+          <Link className="mt-5 block text-center text-sm font-semibold text-primary" to={isSignUp ? '/auth/sign-in' : '/auth/sign-up'}>
             {isSignUp ? 'Already a member? Sign in' : 'New here? Register'}
           </Link>
         </div>
@@ -3759,7 +3759,7 @@ function AdminShell() {
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-bg text-ink">
-      <aside className={`${collapsed ? 'lg:w-[72px]' : 'lg:w-[232px]'} ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'} fixed inset-y-0 left-0 z-40 w-[232px] bg-chrome text-chrome-text transition-all duration-300`}>
+      <aside className={`${collapsed ? 'lg:w-[72px]' : 'lg:w-[272px]'} ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'} fixed inset-y-0 left-0 z-40 w-[272px] bg-chrome text-chrome-text transition-all duration-300`}>
         <button className="absolute right-[-18px] top-6 hidden h-9 w-9 rounded-full bg-primary text-chrome shadow-lg lg:grid lg:place-items-center" onClick={() => setCollapsed(!collapsed)}>
           {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
         </button>
@@ -3797,7 +3797,7 @@ function AdminShell() {
         </div>
       </aside>
       {mobileOpen && <button className="fixed inset-0 z-30 bg-ink/30 lg:hidden" onClick={() => setMobileOpen(false)} aria-label="Close admin menu" />}
-      <div className={`${collapsed ? 'lg:ml-[72px]' : 'lg:ml-[232px]'} min-h-screen min-w-0 transition-all duration-300`}>
+      <div className={`${collapsed ? 'lg:ml-[72px]' : 'lg:ml-[272px]'} min-h-screen min-w-0 transition-all duration-300`}>
         <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-border bg-bg/95 px-4 backdrop-blur lg:px-6">
           <div className="flex items-center gap-3">
             <button className="grid h-10 w-10 place-items-center rounded-full border border-border bg-surface lg:hidden" onClick={() => setMobileOpen(true)}><Menu size={18} /></button>
@@ -3850,7 +3850,7 @@ function AdminNavItem({ to, icon: Icon, label, collapsed, end }) {
   return (
     <Link to={to} className={`flex h-10 items-center gap-2.5 rounded-lg px-3 text-[14px] font-medium transition ${active ? 'border-l-[3px] border-primary bg-primary-soft/20 text-primary-soft' : 'text-chrome-muted hover:bg-surface-warm/10 hover:text-chrome-text'} ${collapsed ? 'justify-center px-0' : ''}`}>
       <Icon size={17} />
-      {!collapsed && <span>{label}</span>}
+      {!collapsed && <span className="whitespace-nowrap">{label}</span>}
     </Link>
   )
 }
