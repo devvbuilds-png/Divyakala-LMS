@@ -1995,6 +1995,7 @@ function CourseDetail() {
         progress: 0,
         last_session_id: isLongCourse ? null : firstSession?.id ?? null,
         status: isLongCourse ? 'pending' : 'active',
+        ...(isLongCourse ? { requested_at: new Date().toISOString() } : {}),
       })
       .select()
       .single()
@@ -2239,7 +2240,7 @@ function LongCourseDetail({
   const liveFormatLabel = 'Live sessions + recordings'
   const enrollmentLabel = 'By request'
   const requestLabel = enrollment?.status === 'pending'
-    ? 'Request Sent'
+    ? 'Request Sent ✓'
     : enrollment?.status === 'active' || enrollment?.status === 'completed'
       ? 'Continue Learning'
       : enrollment?.status === 'rejected'
