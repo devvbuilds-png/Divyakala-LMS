@@ -30,6 +30,7 @@ import {
   ShieldCheck,
   Trash2,
   UploadCloud,
+  UserCheck,
   Users,
   Video,
   X,
@@ -3910,7 +3911,7 @@ function AdminDashboard() {
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary">Divyakala admin studio</p>
             <h2 className="mt-5 max-w-2xl font-display text-5xl font-semibold leading-tight text-ink lg:text-6xl">Hi Drdha, welcome to your dashboard.</h2>
-            <p className="mt-5 max-w-xl text-[16px] leading-8 text-ink-muted">This demo shows the working heart of your LMS: publish a course, receive student practice, review it with annotation and voice, and send feedback back to the learner.</p>
+            <p className="mt-5 max-w-xl text-[16px] leading-8 text-ink-muted">This demo shows the working heart of your LMS: publish short and long courses, manage enrollment approvals, review student practice with annotation and voice, and track every student from first enquiry to active learning.</p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Link to="/admin/settings"><Button>Open Demo Guide</Button></Link>
               <Link to="/admin/courses"><Button variant="secondary">Create a Course</Button></Link>
@@ -3954,10 +3955,12 @@ function AdminDashboard() {
             </div>
             <Link to="/admin/assignments"><Button className="mt-5 w-full">Open review queue</Button></Link>
           </div>
-          <div className="grid gap-4 md:grid-cols-3">
-            <DemoMetricCard icon={BookOpen} label="Courses" value="Ready to publish" copy="Create course pages, sessions, videos, references, and resources." to="/admin/courses" />
-            <DemoMetricCard icon={ClipboardCheck} label="Reviews" value="Live feedback loop" copy="Annotate uploaded work, record voice notes, and approve practice." to="/admin/assignments" />
-            <DemoMetricCard icon={Users} label="Students" value="Enrollment view" copy="See who enrolled and what each student is practicing." to="/admin/students" />
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <DemoMetricCard icon={BookOpen} label="Short Courses" value="Ready to publish" copy="Create course pages, sessions, videos, references, and resources." to="/admin/courses" />
+            <DemoMetricCard icon={ClipboardCheck} label="Assignments" value="Live feedback loop" copy="Annotate uploaded work, record voice notes, and approve practice." to="/admin/assignments" />
+            <DemoMetricCard icon={Layers} label="Long Courses" value="Two-year journeys" copy="Build long-form live programmes with modules, cohorts, and recording links." to="/admin/long-course-management" />
+            <DemoMetricCard icon={UserCheck} label="Enrollment approvals" value="Accept or reject" copy="Review student requests, assign them to a cohort and batch, and open access." to="/admin/long-course-management" />
+            <DemoMetricCard icon={Users} label="Student CRM" value="Every learner tracked" copy="See admission status, fee status, onboarding answers, and contact details." to="/admin/students" />
           </div>
         </div>
         <AdminContentMap />
@@ -3986,11 +3989,14 @@ function AdminContentMap() {
   return (
     <section className="rounded-2xl border border-border bg-surface p-5">
       <SectionTitle title="What this demo proves" subtitle="A simple map of the working experience Drdha can test end to end." />
-      <div className="mt-5 grid gap-4 md:grid-cols-3">
+      <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {[
-          ['Publish learning', 'Courses appear in the student catalog with sessions, video, reference files, and resource downloads.'],
-          ['Collect practice', 'Students upload drawings from the lesson player and see every submission status.'],
-          ['Give feedback', 'Drdha reviews work with text, voice note, and red annotations; students get notified.'],
+          ['Publish short courses', 'Courses appear in the student catalog with sessions, video, reference files, and resource downloads. One click to publish or unpublish.'],
+          ['Run long-form programmes', 'Two-year live programmes with modules, cohorts, and batches. Admin adds YouTube recording links after each concluded session.'],
+          ['Approve enrollments', 'Long-course students send a request; Drdha reviews it, assigns them to a cohort and batch, and accepts with one click.'],
+          ['Collect practice', 'Students upload drawings from the lesson player. Every submission appears in the review queue automatically.'],
+          ['Give feedback', 'Drdha reviews work with text, red stroke annotations, and a recorded voice note. Students are notified instantly.'],
+          ['Track every student', 'The Student CRM shows admission status, fee status, country, age group, and every student\'s onboarding answers.'],
         ].map(([title, copy]) => <article key={title} className="rounded-xl border border-border bg-bg p-4"><h3 className="font-display text-lg font-semibold">{title}</h3><p className="mt-1 text-sm text-ink-muted">{copy}</p></article>)}
       </div>
     </section>
@@ -4008,11 +4014,12 @@ function ComingSoonAdminPage({ icon: Icon, title, description }) {
         <h2 className="mt-3 font-display text-4xl font-semibold leading-tight text-ink">{title}</h2>
         <p className="mx-auto mt-5 max-w-2xl text-[15px] leading-8 text-ink-muted">{description}</p>
         <div className="mx-auto mt-8 max-w-2xl rounded-2xl border border-border bg-surface-warm p-5">
-          <p className="font-display text-xl font-semibold">Courses and Assignments are working now.</p>
-          <p className="mt-2 text-sm leading-6 text-ink-muted">Use the Course Builder to create courses and sessions. Use Assignments to review student work once the submission flow is connected.</p>
+          <p className="font-display text-xl font-semibold">Five modules are working now.</p>
+          <p className="mt-2 text-sm leading-6 text-ink-muted">Courses, Assignments, Long Course Management, Enrollment Approvals, and the Student CRM are all live in this demo.</p>
           <div className="mt-5 flex flex-wrap justify-center gap-3">
             <Link to="/admin/courses"><Button>Go to Courses</Button></Link>
-            <Link to="/admin/assignments"><Button variant="secondary">Go to Assignments</Button></Link>
+            <Link to="/admin/long-course-management"><Button variant="secondary">Long Course Management</Button></Link>
+            <Link to="/admin/assignments"><Button variant="secondary">Assignments</Button></Link>
           </div>
         </div>
       </div>
@@ -6449,29 +6456,33 @@ function AdminSettings() {
       <section className="rounded-2xl border border-border bg-surface p-6 shadow-sm">
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-primary">Demo guide</p>
         <h2 className="mt-3 font-display text-3xl font-semibold">What Drdha can try today</h2>
-        <p className="mt-3 max-w-3xl text-sm leading-7 text-ink-muted">The working tabs are grouped at the top of the sidebar. Future modules are separated under Coming soon so there is no confusion about what is live.</p>
+        <p className="mt-3 max-w-3xl text-sm leading-7 text-ink-muted">Five working modules are live in this demo. Future modules are separated under Coming soon so there is no confusion about what is built versus what is planned.</p>
       </section>
-      <section className="grid gap-5 lg:grid-cols-3">
+      <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
         {[
-          ['1', 'Courses', 'Create a course, add sessions with video URLs, references, and resources, then publish it to the student catalog.', '/admin/courses'],
-          ['2', 'Assignments', 'Open submitted student work, draw annotations directly on the drawing, record a voice note, write feedback, and save the review.', '/admin/assignments'],
-          ['3', 'Students', 'See enrolled students and the progress they have made from the student side.', '/admin/students'],
+          ['1', 'Courses', 'Create a short course, add sessions with YouTube or Vimeo URLs, reference files, and resource downloads, then publish it to the student catalog.', '/admin/courses'],
+          ['2', 'Assignments', 'Open submitted student work, draw red stroke annotations directly on the image, record a voice note, write feedback, and save the review. Students are notified in real time.', '/admin/assignments'],
+          ['3', 'Long Course Management', 'See the two-year programme. Manage cohorts and batches. Add YouTube recording links to concluded sessions so enrolled students can watch replays in their learning view.', '/admin/long-course-management'],
+          ['4', 'Enrollment Approvals', 'Students request enrollment from the long-course detail page. Approve or reject the request here, assign them a cohort and batch, and their course opens in My Learning.', '/admin/long-course-management'],
+          ['5', 'Student CRM', 'Every student who signed up appears here with their admission status, fee status, country, age group, and onboarding answers. Update admission and fee status directly from the detail panel.', '/admin/students'],
         ].map(([step, title, copy, href]) => (
           <article key={title} className="rounded-2xl border border-border bg-surface p-5">
             <div className="grid h-10 w-10 place-items-center rounded-full bg-primary-soft font-display text-lg font-semibold text-primary">{step}</div>
             <h3 className="mt-4 font-display text-xl font-semibold">{title}</h3>
             <p className="mt-2 text-sm leading-6 text-ink-muted">{copy}</p>
-            <Link to={href}><Button className="mt-5 w-full">Open {title}</Button></Link>
+            <Link to={href}><Button className="mt-5 w-full">Open →</Button></Link>
           </article>
         ))}
       </section>
       <section className="rounded-2xl border border-border bg-surface-warm p-5">
-        <h3 className="font-display text-xl font-semibold">Coming soon — intentionally not wired for this demo</h3>
-        <div className="mt-4 grid gap-3 md:grid-cols-3">
+        <h3 className="font-display text-xl font-semibold">Coming soon — planned for the full build</h3>
+        <p className="mt-1 text-sm text-ink-muted">These modules are designed and ready to build once the contract is signed.</p>
+        <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
           {[
-            ['Cards', 'Reusable content library — videos, PDFs, prompts, and notes decoupled from courses.'],
-            ['Playlists', 'Learning paths and course bundles for structured student journeys.'],
-            ['Workshops', 'Live events, registration, replay hosting, and workshop notifications.'],
+            ['Student Community', 'A shared space where all students can post their art, react to each other\'s work, leave encouragements, and build a practice together.'],
+            ['Cards', 'A reusable content library — videos, PDFs, prompts, and reference notes that can be attached to any session in any course.'],
+            ['Playlists', 'Learning paths and course bundles for structured journeys across multiple courses.'],
+            ['Workshops', 'Live events with registration, replay hosting, and automatic notifications to enrolled students.'],
           ].map(([title, copy]) => (
             <div key={title} className="rounded-xl border border-border bg-surface p-4">
               <p className="font-display text-lg font-semibold">{title}</p>
