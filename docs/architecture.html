@@ -1,0 +1,920 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Divyakala LMS — System Architecture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#f4efe6;
+    --bg-2:#ebe4d6;
+    --surface:#faf6ec;
+    --surface-warm:#fffaf0;
+    --ink:#181613;
+    --ink-2:#3a342c;
+    --ink-3:#6b6256;
+    --ink-4:#9a9082;
+    --line:#d9cfba;
+    --line-2:#c4b89e;
+    --rule:#1c1916;
+    --rust:#b8451f;      /* the one accent */
+    --rust-deep:#8c3416;
+    --ok:#4a6b1a;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Inter',-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;
+    font-size:15px;
+    line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+  ::selection{background:var(--ink);color:var(--bg);}
+
+  .wrap{max-width:1240px;margin:0 auto;padding:0 40px 96px;position:relative;}
+
+  /* gutter rail */
+  .rail{
+    position:fixed;top:0;left:50%;transform:translateX(-620px);
+    height:100vh;width:1px;background:var(--line);z-index:1;pointer-events:none;
+  }
+  .rail::before{
+    content:"";position:absolute;left:0;top:0;width:1px;height:100%;
+    background:repeating-linear-gradient(180deg,var(--ink) 0 6px,transparent 6px 14px);
+    opacity:.15;
+  }
+  @media(max-width:1280px){.rail{display:none;}}
+
+  /* ---- top bar ---- */
+  .top{
+    display:flex;align-items:center;justify-content:space-between;gap:24px;
+    padding:22px 0;border-bottom:1px solid var(--rule);
+    font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.04em;
+    color:var(--ink-2);text-transform:uppercase;
+  }
+  .top .brand{display:flex;align-items:center;gap:14px;}
+  .top .mark{
+    width:22px;height:22px;border:1.4px solid var(--ink);position:relative;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .top .mark::before{content:"";width:8px;height:8px;background:var(--rust);}
+  .top .b{font-weight:500;color:var(--ink);letter-spacing:.06em;}
+  .top .r{display:flex;align-items:center;gap:22px;color:var(--ink-3);}
+  .top .r span b{color:var(--ink);font-weight:500;}
+
+  /* ---- header ---- */
+  header{
+    padding:60px 0 56px;border-bottom:1px solid var(--rule);
+    display:grid;grid-template-columns:1fr;gap:36px;position:relative;
+  }
+  .h-meta{
+    display:flex;align-items:flex-start;gap:36px;flex-wrap:wrap;
+    font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--ink-3);
+  }
+  .h-meta div{display:flex;flex-direction:column;gap:6px;}
+  .h-meta div b{color:var(--ink);font-weight:500;letter-spacing:.04em;text-transform:none;font-family:'Inter',sans-serif;font-size:13px;}
+  h1{
+    font-family:'Instrument Serif',Georgia,serif;font-weight:400;
+    font-size:clamp(58px,9vw,128px);line-height:.92;letter-spacing:-.03em;color:var(--ink);
+    text-wrap:balance;
+  }
+  h1 .it{font-style:italic;color:var(--rust);}
+  h1 .amp{font-style:italic;color:var(--ink-3);font-weight:400;}
+  .lede{
+    max-width:680px;font-size:18px;color:var(--ink-2);line-height:1.55;
+    text-wrap:pretty;
+    column-gap:36px;
+  }
+  .lede .drop{
+    font-family:'Instrument Serif',serif;font-style:italic;font-size:64px;
+    float:left;line-height:.85;padding:8px 14px 0 0;color:var(--rust);font-weight:400;
+  }
+  .h-foot{
+    display:flex;justify-content:space-between;align-items:center;gap:18px;flex-wrap:wrap;
+    padding-top:24px;border-top:1px dashed var(--line-2);
+  }
+  .h-foot .hint{
+    display:inline-flex;align-items:center;gap:10px;
+    font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.02em;color:var(--ink-2);
+  }
+  .h-foot .hint .pulse{width:7px;height:7px;border-radius:50%;background:var(--rust);
+    box-shadow:0 0 0 0 rgba(184,69,31,.5);animation:pulse 2.4s infinite;}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(184,69,31,.4);}70%{box-shadow:0 0 0 10px rgba(184,69,31,0);}100%{box-shadow:0 0 0 0 rgba(184,69,31,0);}}
+  .h-foot .sig{
+    font-family:'Instrument Serif',serif;font-style:italic;color:var(--ink-3);font-size:18px;
+  }
+
+  /* ---- stats row ---- */
+  .stats{
+    display:grid;grid-template-columns:repeat(4,1fr);
+    border-bottom:1px solid var(--rule);
+  }
+  .stat{
+    padding:32px 28px 30px 0;border-right:1px dashed var(--line-2);position:relative;
+  }
+  .stat:last-child{border-right:none;}
+  .stat:not(:first-child){padding-left:28px;}
+  .stat .n{
+    position:absolute;top:14px;right:18px;
+    font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--ink-4);letter-spacing:.08em;
+  }
+  .stat:last-child .n{right:0;}
+  .stat .v{
+    font-family:'Instrument Serif',serif;font-weight:400;font-size:56px;line-height:1;color:var(--ink);letter-spacing:-.03em;
+  }
+  .stat .v .small{font-size:32px;color:var(--ink-3);}
+  .stat:nth-child(1) .v{color:var(--rust);}
+  .stat .l{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-2);margin-top:14px;}
+  .stat .d{font-size:13px;color:var(--ink-3);margin-top:5px;line-height:1.45;}
+
+  /* ---- section header ---- */
+  .sec-head{
+    margin:88px 0 32px;display:grid;grid-template-columns:140px 1fr;gap:36px;align-items:end;
+  }
+  .sec-head .num{
+    font-family:'Instrument Serif',serif;font-size:80px;line-height:.85;color:var(--ink);
+    letter-spacing:-.04em;font-style:italic;font-weight:400;
+  }
+  .sec-head .num em{color:var(--rust);font-style:italic;}
+  .sec-head .r{padding-bottom:10px;border-bottom:1px solid var(--rule);}
+  .sec-head .kicker{
+    font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.16em;color:var(--ink-3);text-transform:uppercase;margin-bottom:8px;
+  }
+  .sec-head h2{
+    font-family:'Instrument Serif',serif;font-weight:400;font-size:38px;color:var(--ink);
+    line-height:1.05;letter-spacing:-.015em;
+  }
+  .sec-head h2 em{font-style:italic;color:var(--ink-3);}
+
+  /* ---- diagram ---- */
+  .diagram{
+    display:flex;flex-direction:column;gap:0;position:relative;
+    padding:10px 0;
+  }
+  .layer{
+    opacity:0;transform:translateY(8px);
+    animation:rise .6s cubic-bezier(.2,.7,.25,1) forwards;
+    padding:14px 0;
+  }
+  @keyframes rise{to{opacity:1;transform:translateY(0);}}
+  .layer-head{
+    display:grid;grid-template-columns:96px 1fr auto;gap:18px;align-items:center;
+    margin:0 0 16px;
+  }
+  .layer-head .lnum{
+    font-family:'Instrument Serif',serif;font-style:italic;font-size:32px;color:var(--rust);line-height:1;
+  }
+  .layer-head .ltext{
+    font-family:'Inter',sans-serif;font-size:14px;font-weight:500;color:var(--ink);letter-spacing:-.005em;
+  }
+  .layer-head .ltext span{color:var(--ink-3);font-weight:400;font-style:italic;font-family:'Instrument Serif',serif;font-size:17px;margin-left:8px;}
+  .layer-head .rule{height:1px;background:var(--rule);}
+  .layer-head .tag{
+    font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-4);
+  }
+
+  .row{display:grid;grid-template-columns:96px 1fr;gap:18px;}
+  .row .side{
+    font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.12em;color:var(--ink-4);
+    padding-top:6px;text-transform:uppercase;
+  }
+  .row .nodes{display:flex;gap:14px;flex-wrap:wrap;}
+  .row.two .nodes{display:grid;grid-template-columns:1.05fr 1fr;gap:14px;}
+
+  /* component card */
+  .node{
+    flex:1;min-width:200px;background:var(--surface);border:1px solid var(--line-2);
+    border-radius:3px;padding:18px 18px 14px;cursor:pointer;position:relative;
+    transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease,background .18s ease;
+  }
+  .node::before{
+    content:"";position:absolute;top:-1px;left:-1px;width:14px;height:14px;
+    border-top:1.5px solid var(--ink);border-left:1.5px solid var(--ink);
+    opacity:0;transition:opacity .18s ease;
+  }
+  .node:hover{transform:translateY(-2px);box-shadow:0 14px 28px -18px rgba(24,22,19,.25);border-color:var(--ink);background:var(--surface-warm);}
+  .node:hover::before{opacity:1;}
+  .node-top{display:flex;align-items:flex-start;gap:12px;}
+  .ico{
+    width:36px;height:36px;flex-shrink:0;border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;
+    background:var(--bg);color:var(--ink);
+  }
+  .ico svg{width:19px;height:19px;}
+  .node-text{flex:1;min-width:0;}
+  .node h3{font-family:'Instrument Serif',serif;font-weight:400;font-size:21px;line-height:1.05;color:var(--ink);letter-spacing:-.01em;}
+  .node .tool{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--ink-3);margin-top:4px;letter-spacing:.005em;}
+  .node .tag{font-size:13.5px;color:var(--ink-2);margin-top:12px;line-height:1.5;}
+  .node-foot{display:flex;align-items:center;justify-content:space-between;margin-top:14px;
+    padding-top:12px;border-top:1px dashed var(--line);}
+  .chip{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--ink-3);}
+  .more{font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--ink-3);
+    width:20px;height:20px;display:flex;align-items:center;justify-content:center;
+    border:1px solid var(--line);transition:.18s;}
+  .node:hover .more{background:var(--ink);color:var(--bg);border-color:var(--ink);}
+
+  /* cluster (Supabase) */
+  .cluster{
+    background:var(--bg-2);border:1px solid var(--line-2);border-radius:4px;padding:16px;
+    position:relative;
+  }
+  .cluster::after{
+    content:"";position:absolute;top:8px;right:8px;width:18px;height:18px;
+    border-top:1px dashed var(--ink-3);border-right:1px dashed var(--ink-3);opacity:.5;
+  }
+  .cluster-head{display:flex;align-items:baseline;gap:12px;margin:2px 4px 14px;flex-wrap:wrap;}
+  .cluster-head .b{font-family:'Instrument Serif',serif;font-weight:400;font-size:22px;color:var(--ink);font-style:italic;letter-spacing:-.01em;}
+  .cluster-head .n{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--ink-3);letter-spacing:.08em;text-transform:uppercase;}
+  .cluster-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .cluster .node{min-width:0;background:var(--surface-warm);}
+  .side-col{display:flex;flex-direction:column;gap:14px;}
+
+  /* connector */
+  .connector{display:grid;grid-template-columns:96px 1fr;gap:18px;padding:2px 0;}
+  .connector .col{display:flex;align-items:center;gap:14px;padding-left:14px;}
+  .connector .seg{width:1.5px;height:18px;background:var(--ink);}
+  .connector .cap{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--ink-3);}
+  .connector .ln{flex:1;height:1px;background:repeating-linear-gradient(90deg,var(--ink-4) 0 4px,transparent 4px 8px);opacity:.5;}
+
+  /* scalability — large editorial pull */
+  .scale-band{
+    margin:88px 0 0;background:var(--ink);color:var(--bg);border-radius:4px;
+    padding:60px 60px 64px;position:relative;overflow:hidden;
+    display:grid;grid-template-columns:140px 1fr;gap:36px;
+  }
+  .scale-band::before{
+    content:"";position:absolute;top:0;left:0;right:0;height:1px;
+    background:repeating-linear-gradient(90deg,var(--bg) 0 6px,transparent 6px 14px);opacity:.25;
+  }
+  .scale-band .lnum{font-family:'Instrument Serif',serif;font-style:italic;font-size:80px;color:var(--rust);line-height:.85;letter-spacing:-.03em;}
+  .scale-band .lab{font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.18em;
+    text-transform:uppercase;color:var(--ink-4);margin-bottom:14px;}
+  .scale-band h2{font-family:'Instrument Serif',serif;font-weight:400;font-size:44px;
+    margin:0 0 22px;line-height:1.02;letter-spacing:-.02em;text-wrap:balance;max-width:800px;}
+  .scale-band h2 em{color:var(--rust);font-style:italic;}
+  .scale-band p{color:#d9d2c2;font-size:17px;max-width:780px;line-height:1.6;text-wrap:pretty;}
+  .scale-band p em{color:var(--bg);font-style:italic;}
+
+  /* flows */
+  .flows{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
+  .flow{background:var(--surface);border:1px solid var(--line-2);border-radius:3px;padding:26px 24px;position:relative;}
+  .flow::before{
+    content:"";position:absolute;top:-1px;left:-1px;width:18px;height:18px;
+    border-top:1.5px solid var(--ink);border-left:1.5px solid var(--ink);
+  }
+  .flow .fn{display:flex;align-items:baseline;gap:14px;margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid var(--line);}
+  .flow .fnum{font-family:'Instrument Serif',serif;font-style:italic;font-size:38px;
+    color:var(--rust);line-height:.85;letter-spacing:-.02em;}
+  .flow h3{font-family:'Instrument Serif',serif;font-weight:400;font-size:22px;color:var(--ink);line-height:1.1;letter-spacing:-.01em;}
+  .flow ol{list-style:none;counter-reset:s;}
+  .flow li{position:relative;padding:10px 0 10px 26px;font-size:13.5px;color:var(--ink-2);
+    border-bottom:1px dashed var(--line);line-height:1.55;}
+  .flow li:last-child{border-bottom:none;}
+  .flow li::before{counter-increment:s;content:counter(s,decimal-leading-zero);position:absolute;left:0;top:11px;
+    font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--ink-3);font-weight:500;letter-spacing:.04em;}
+  .flow li b{color:var(--ink);font-weight:600;}
+
+  /* cost breakdown */
+  .cbreak{background:var(--surface);border:1px solid var(--line-2);border-radius:3px;overflow:hidden;position:relative;}
+  .cbreak::before{
+    content:"";position:absolute;top:-1px;left:-1px;width:18px;height:18px;
+    border-top:1.5px solid var(--ink);border-left:1.5px solid var(--ink);z-index:2;
+  }
+  .cb-row{display:grid;grid-template-columns:repeat(3,1fr);}
+  .cb-item{padding:26px 24px 22px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);position:relative;}
+  .cb-item:nth-child(3n){border-right:none;}
+  .cb-item:nth-last-child(-n+3){border-bottom:none;}
+  .cb-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;}
+  .cb-svc{font-family:'Instrument Serif',serif;font-weight:400;font-size:22px;color:var(--ink);letter-spacing:-.01em;}
+  .cb-tag{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.08em;
+    text-transform:uppercase;padding:3px 7px;border:1px solid var(--line-2);
+    background:var(--bg);color:var(--ink-2);}
+  .cb-tag.free{color:var(--ok);border-color:var(--ok);}
+  .cb-tag.grows{color:var(--rust);border-color:var(--rust);}
+  .cb-what{font-size:12px;color:var(--ink-3);margin-bottom:18px;font-family:'JetBrains Mono',monospace;letter-spacing:.01em;line-height:1.5;text-transform:uppercase;}
+  .cb-cost{font-family:'Instrument Serif',serif;font-weight:400;font-size:36px;color:var(--rust);line-height:1;margin-bottom:10px;letter-spacing:-.02em;}
+  .cb-item.zero .cb-cost{color:var(--ok);}
+  .cb-note{font-size:12.5px;color:var(--ink-3);line-height:1.55;}
+  .cb-total{display:flex;align-items:baseline;gap:24px;flex-wrap:wrap;
+    background:var(--ink);padding:28px 30px;color:var(--bg);}
+  .cb-total .lab{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.18em;
+    text-transform:uppercase;color:var(--ink-4);}
+  .cb-t-fig{font-family:'Instrument Serif',serif;font-weight:400;font-size:36px;color:var(--bg);line-height:1;letter-spacing:-.02em;}
+  .cb-t-fig em{color:var(--rust);font-style:italic;}
+  .cb-t-note{font-size:12.5px;color:#a8a08f;margin-left:auto;max-width:380px;font-family:'Instrument Serif',serif;font-style:italic;font-size:15px;line-height:1.45;}
+
+  /* footer */
+  footer{margin-top:96px;padding:32px 0 0;border-top:1px solid var(--rule);
+    display:grid;grid-template-columns:140px 1fr auto;gap:36px;align-items:start;}
+  footer .num{font-family:'Instrument Serif',serif;font-style:italic;font-size:32px;color:var(--ink-3);line-height:1;}
+  footer .mid{color:var(--ink-2);font-family:'Instrument Serif',serif;font-style:italic;font-size:18px;line-height:1.4;max-width:420px;}
+  footer .mid b{color:var(--rust);font-style:normal;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;font-weight:500;}
+  footer .r{color:var(--ink-3);font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.08em;line-height:1.7;text-align:right;}
+
+  /* ---- drawer ---- */
+  .overlay{position:fixed;inset:0;background:rgba(24,22,19,.5);backdrop-filter:blur(2px);
+    opacity:0;pointer-events:none;transition:opacity .24s;z-index:40;}
+  .overlay.on{opacity:1;pointer-events:auto;}
+  .drawer{
+    position:fixed;top:0;right:0;height:100%;width:480px;max-width:92vw;z-index:50;
+    background:var(--bg);border-left:1px solid var(--rule);
+    transform:translateX(102%);transition:transform .32s cubic-bezier(.3,.7,.25,1);
+    display:flex;flex-direction:column;box-shadow:-20px 0 60px -30px rgba(24,22,19,.4);
+  }
+  .drawer.on{transform:translateX(0);}
+  .dr-head{padding:30px 34px 24px;border-bottom:1px solid var(--rule);position:relative;}
+  .dr-head::before{
+    content:"";position:absolute;top:-1px;left:-1px;width:20px;height:20px;
+    border-top:1.5px solid var(--ink);border-left:1.5px solid var(--ink);
+  }
+  .dr-ico{width:44px;height:44px;border:1px solid var(--line-2);display:flex;align-items:center;justify-content:center;
+    background:var(--surface);color:var(--ink);margin-bottom:16px;}
+  .dr-ico svg{width:22px;height:22px;}
+  .dr-head h2{font-family:'Instrument Serif',serif;font-weight:400;font-size:34px;color:var(--ink);line-height:1.02;letter-spacing:-.02em;}
+  .dr-tool{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--rust);margin-top:8px;letter-spacing:.02em;}
+  .dr-tagline{font-size:16px;color:var(--ink-2);margin-top:14px;line-height:1.5;font-style:italic;font-family:'Instrument Serif',serif;}
+  .dr-body{padding:6px 34px 36px;overflow-y:auto;flex:1;}
+  .dr-sec{padding:22px 0;border-bottom:1px solid var(--line);}
+  .dr-sec:last-child{border-bottom:none;}
+  .dr-sec .sl{display:flex;align-items:center;gap:9px;margin-bottom:10px;}
+  .dr-sec .sl span{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--ink-3);}
+  .dr-sec p{font-size:14.5px;color:var(--ink-2);line-height:1.65;text-wrap:pretty;}
+  .dr-sec p+p{margin-top:10px;}
+  .dr-sec .big{font-family:'Instrument Serif',serif;font-weight:400;font-size:22px;
+    color:var(--rust);margin-bottom:8px;line-height:1.15;letter-spacing:-.01em;font-style:italic;}
+  .lvl{display:inline-flex;align-items:center;gap:8px;font-family:'JetBrains Mono',monospace;
+    font-size:10.5px;letter-spacing:.04em;padding:5px 11px;
+    border:1px solid var(--line-2);background:var(--surface);margin-bottom:10px;color:var(--ink-2);}
+  .lvl .ds{display:flex;gap:3px;}
+  .lvl .ds i{width:5px;height:5px;border-radius:50%;background:var(--line-2);}
+  .lvl .ds i.on{background:var(--rust);}
+  .dr-note{margin-top:12px;background:var(--surface);border:1px solid var(--line-2);border-left:3px solid var(--rust);
+    padding:14px 16px;font-size:13.5px;color:var(--ink-2);line-height:1.55;}
+  .dr-note b{color:var(--rust);font-weight:600;}
+  .dr-close{position:absolute;top:22px;right:24px;width:32px;height:32px;
+    border:1px solid var(--line-2);background:var(--bg);color:var(--ink-2);cursor:pointer;
+    font-size:16px;line-height:1;display:flex;align-items:center;justify-content:center;transition:.16s;}
+  .dr-close:hover{background:var(--ink);color:var(--bg);border-color:var(--ink);}
+
+  @media(max-width:980px){
+    .wrap{padding:0 24px 70px;}
+    h1{font-size:64px;}
+    .stats{grid-template-columns:1fr 1fr;}
+    .stat:nth-child(2){border-right:none;}
+    .stat:nth-child(-n+2){border-bottom:1px dashed var(--line-2);}
+    .sec-head{grid-template-columns:1fr;gap:14px;}
+    .sec-head .num{font-size:48px;}
+    .layer-head{grid-template-columns:auto 1fr auto;gap:14px;}
+    .row,.connector{grid-template-columns:1fr;gap:8px;}
+    .row .side,.connector .col{padding-left:0;}
+    .row.two .nodes{grid-template-columns:1fr;}
+    .scale-band{grid-template-columns:1fr;padding:36px 28px;}
+    .scale-band .lnum{font-size:48px;}
+    .scale-band h2{font-size:32px;}
+    .flows{grid-template-columns:1fr;}
+    .cb-row{grid-template-columns:1fr 1fr;}
+    .cb-item:nth-child(3n){border-right:1px solid var(--line);}
+    .cb-item:nth-child(2n){border-right:none;}
+    .cb-item:nth-last-child(-n+3){border-bottom:1px solid var(--line);}
+    .cb-item:nth-last-child(-n+2){border-bottom:none;}
+    footer{grid-template-columns:1fr;}
+    footer .r{text-align:left;}
+  }
+  @media(max-width:560px){
+    .wrap{padding:0 16px 60px;}
+    h1{font-size:48px;}
+    .lede{font-size:16px;}
+    .lede .drop{font-size:48px;}
+    .stats{grid-template-columns:1fr;}
+    .stat{border-right:none !important;border-bottom:1px dashed var(--line-2);padding:24px 0 !important;}
+    .stat:last-child{border-bottom:none;}
+    .cluster-grid{grid-template-columns:1fr;}
+    .scale-band{padding:28px 22px;}
+    .cb-row{grid-template-columns:1fr;}
+    .cb-item{border-right:none !important;}
+    .cb-total{flex-direction:column;align-items:flex-start;gap:10px;}
+    .cb-t-note{margin-left:0;}
+  }
+</style>
+</head>
+<body>
+<div class="rail"></div>
+
+<div class="wrap">
+
+  <div class="top">
+    <div class="brand">
+      <div class="mark"></div>
+      <span class="b">Divyakala</span>
+      <span>·</span>
+      <span>Architecture Reference</span>
+    </div>
+    <div class="r">
+      <span>Version <b>1.0</b></span>
+      <span>·</span>
+      <span>May <b>2026</b></span>
+      <span>·</span>
+      <span><b>Internal</b></span>
+    </div>
+  </div>
+
+  <header>
+    <div class="h-meta">
+      <div><span>Document</span><b>System Architecture</b></div>
+      <div><span>Scope</span><b>Production LMS · v1</b></div>
+      <div><span>Audience</span><b>Drdha / Divyakala</b></div>
+      <div><span>Status</span><b style="color:var(--rust)">Ready to build</b></div>
+    </div>
+
+    <h1>Divyakala  <span class="it">LMS</span> 
+Architecture.</h1>
+
+    <p class="lede"><span class="drop">A</span>n end-to-end reference for the Divyakala LMS — every part of the platform, what each part costs to run, who maintains it, and how the whole thing holds up when a few hundred learners arrive at once. Click any component for its tool, running cost, and maintenance burden.</p>
+
+    <div class="h-foot">
+      <span class="hint"><span class="pulse"></span>Every card is interactive — open one to read the detail.</span>
+      <span class="sig">— production architecture, drawn end to end.</span>
+    </div>
+  </header>
+
+  <!-- stats -->
+  <div class="stats">
+    <div class="stat">
+      <span class="n">i.</span>
+      <div class="v">₹6<span class="small">–</span>9<span class="small">K</span></div>
+      <div class="l">Monthly cloud cost</div>
+      <div class="d">Infrastructure to run the platform.</div>
+    </div>
+    <div class="stat">
+      <span class="n">ii.</span>
+      <div class="v">300<span class="small">+</span></div>
+      <div class="l">Concurrent users</div>
+      <div class="d">Comfortable, with headroom beyond.</div>
+    </div>
+    <div class="stat">
+      <span class="n">iii.</span>
+      <div class="v">100<span class="small">%</span></div>
+      <div class="l">White-labeled</div>
+      <div class="d">Entirely the Divyakala brand.</div>
+    </div>
+    <div class="stat">
+      <span class="n">iv.</span>
+      <div class="v">∞</div>
+      <div class="l">Video concurrency</div>
+      <div class="d">CDN-served — no streaming ceiling.</div>
+    </div>
+  </div>
+
+  <!-- DIAGRAM -->
+  <div class="sec-head">
+    <div class="num"><em>§</em>01</div>
+    <div class="r">
+      <div class="kicker">Architecture · layered view</div>
+      <h2>How the system works</h2>
+    </div>
+  </div>
+
+  <div class="diagram" id="diagram">
+
+    <!-- Layer 1: Users -->
+    <div class="layer" style="animation-delay:.05s">
+      <div class="layer-head">
+        <div class="lnum">i.</div>
+        <div class="ltext">Who uses it <span>— the people at either end.</span></div>
+        <div class="tag">Layer 01</div>
+      </div>
+      <div class="row">
+        <div class="side">Users</div>
+        <div class="nodes">
+          <div class="node" data-c="students"></div>
+          <div class="node" data-c="admin"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="connector"><div></div><div class="col"><span class="seg"></span><span class="cap">Browser · no install</span><div class="ln"></div></div></div>
+
+    <!-- Layer 2: Client -->
+    <div class="layer" style="animation-delay:.13s">
+      <div class="layer-head">
+        <div class="lnum">ii.</div>
+        <div class="ltext">The interface <span>— what they actually see.</span></div>
+        <div class="tag">Layer 02</div>
+      </div>
+      <div class="row">
+        <div class="side">Client</div>
+        <div class="nodes">
+          <div class="node" data-c="spa"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="connector"><div></div><div class="col"><span class="seg"></span><span class="cap">Secure API calls · HTTPS</span><div class="ln"></div></div></div>
+
+    <!-- Layer 3: Platform -->
+    <div class="layer" style="animation-delay:.21s">
+      <div class="layer-head">
+        <div class="lnum">iii.</div>
+        <div class="ltext">The platform <span>— where the work happens.</span></div>
+        <div class="tag">Layer 03</div>
+      </div>
+      <div class="row two">
+        <div class="side">Services</div>
+        <div class="nodes">
+          <!-- Supabase cluster -->
+          <div class="cluster">
+            <div class="cluster-head">
+              <span class="b">Supabase</span>
+              <span class="n">one platform · one bill</span>
+            </div>
+            <div class="cluster-grid">
+              <div class="node" data-c="auth"></div>
+              <div class="node" data-c="db"></div>
+              <div class="node" data-c="storage"></div>
+              <div class="node" data-c="realtime"></div>
+              <div class="node" data-c="edge" style="grid-column:1/-1"></div>
+            </div>
+          </div>
+          <!-- external services -->
+          <div class="side-col">
+            <div class="node" data-c="bunny"></div>
+            <div class="node" data-c="zoom"></div>
+            <div class="node" data-c="pipeline"></div>
+            <div style="display:flex;gap:14px">
+              <div class="node" data-c="email"></div>
+              <div class="node" data-c="payments"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="connector"><div></div><div class="col"><span class="seg"></span><span class="cap">Runs underneath everything</span><div class="ln"></div></div></div>
+
+    <!-- Layer 4: Foundation -->
+    <div class="layer" style="animation-delay:.29s">
+      <div class="layer-head">
+        <div class="lnum">iv.</div>
+        <div class="ltext">Foundation <span>— safety, upkeep, the quiet stuff.</span></div>
+        <div class="tag">Layer 04</div>
+      </div>
+      <div class="row">
+        <div class="side">Plumbing</div>
+        <div class="nodes">
+          <div class="node" data-c="security"></div>
+          <div class="node" data-c="backups"></div>
+          <div class="node" data-c="monitoring"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- scalability -->
+  <div class="scale-band">
+    <div class="lnum">¶</div>
+    <div>
+      <div class="lab">An aside on scale</div>
+      <h2>Will it hold up with <em>everyone</em> watching at once?</h2>
+      <p>Yes. The app and every video are served from global <em>CDNs</em> — adding viewers just adds edge requests, never a bottleneck. Live-class concurrency is <em>Zoom's</em> job, not ours. The only ceiling worth watching is the database, and at 200–300 users it sits well inside the default tier — liftable later with a single setting, not a rebuild. The system is ready for your expected load and several times beyond it.</p>
+    </div>
+  </div>
+
+  <!-- FLOWS -->
+  <div class="sec-head">
+    <div class="num"><em>§</em>02</div>
+    <div class="r">
+      <div class="kicker">How it works · three flows</div>
+      <h2>Three journeys <em>through the system.</em></h2>
+    </div>
+  </div>
+
+  <div class="flows">
+    <div class="flow">
+      <div class="fn"><span class="fnum">i.</span><h3>Watching a recorded lesson</h3></div>
+      <ol>
+        <li>Student signs in — <b>Supabase Auth</b> verifies them.</li>
+        <li>The app loads instantly from the <b>Cloudflare</b> edge.</li>
+        <li>Course data is read from the <b>database</b>; access is checked by security policies.</li>
+        <li>An <b>Edge Function</b> signs a short-lived video token.</li>
+        <li><b>Bunny.net</b> streams adaptive-quality video from the nearest edge.</li>
+        <li>Progress &amp; submissions are saved back to <b>Supabase</b>.</li>
+      </ol>
+    </div>
+    <div class="flow">
+      <div class="fn"><span class="fnum">ii.</span><h3>Attending a live class</h3></div>
+      <ol>
+        <li>Admin creates a batch session with date, time &amp; <b>Zoom</b> link.</li>
+        <li>Session is stored in the <b>database</b> against that batch.</li>
+        <li>Enrolled students see it on their <b>Batch Dashboard</b> — only their batch.</li>
+        <li>At class time the student clicks through to <b>Zoom</b>.</li>
+        <li><b>Zoom</b> hosts the live workshop for up to 100 participants.</li>
+      </ol>
+    </div>
+    <div class="flow">
+      <div class="fn"><span class="fnum">iii.</span><h3>Recording → library</h3></div>
+      <ol>
+        <li>Class opens — <b>Zoom</b> auto-records to the cloud, no button pressed.</li>
+        <li>Class ends; the recording lands in <b>Zoom Cloud</b> — a 10 GB buffer.</li>
+        <li><b>v1:</b> Drdha moves the recording into <b>Bunny</b> from the admin panel.</li>
+        <li><b>v2:</b> a Zoom webhook + <b>Edge Function</b> push it to Bunny automatically.</li>
+        <li>The <b>Zoom Cloud</b> copy is deleted to free the buffer.</li>
+        <li>It now plays like any lesson — CDN-streamed from <b>Bunny</b>.</li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- COST BREAKDOWN -->
+  <div class="sec-head">
+    <div class="num"><em>§</em>03</div>
+    <div class="r">
+      <div class="kicker">Running cost · monthly</div>
+      <h2>₹6,000 <em>—</em> 9,000 / month.</h2>
+    </div>
+  </div>
+
+  <div class="cbreak">
+    <div class="cb-row">
+      <div class="cb-item zero">
+        <div class="cb-top"><span class="cb-svc">Cloudflare Pages</span><span class="cb-tag free">free</span></div>
+        <div class="cb-what">Website hosting</div>
+        <div class="cb-cost">₹0</div>
+        <div class="cb-note">Commercial use allowed — hosting costs nothing at this scale.</div>
+      </div>
+      <div class="cb-item">
+        <div class="cb-top"><span class="cb-svc">Supabase Pro</span></div>
+        <div class="cb-what">Database · Auth · Storage · Realtime · Edge</div>
+        <div class="cb-cost">~₹2,100</div>
+        <div class="cb-note">Daily backups included. Free tier not viable — pauses after a week of inactivity.</div>
+      </div>
+      <div class="cb-item">
+        <div class="cb-top"><span class="cb-svc">Zoom Pro</span></div>
+        <div class="cb-what">Live workshops · 100 participants · cloud recording</div>
+        <div class="cb-cost">~₹1,400</div>
+        <div class="cb-note">Zoom Cloud is a 10 GB transit buffer — recordings move to Bunny and are deleted.</div>
+      </div>
+      <div class="cb-item">
+        <div class="cb-top"><span class="cb-svc">Bunny.net</span><span class="cb-tag grows">grows with usage</span></div>
+        <div class="cb-what">Video storage · streaming · transcoding</div>
+        <div class="cb-cost">~₹500 – 4000+</div>
+        <div class="cb-note">The variable line. Driven by library size and watch hours — the reason the budget has headroom.</div>
+      </div>
+      <div class="cb-item zero">
+        <div class="cb-top"><span class="cb-svc">Resend</span><span class="cb-tag free">free tier</span></div>
+        <div class="cb-what">Transactional email</div>
+        <div class="cb-cost">₹0</div>
+        <div class="cb-note">3,000 emails/month — comfortably covers this volume.</div>
+      </div>
+      <div class="cb-item">
+        <div class="cb-top"><span class="cb-svc">divyakala.com</span></div>
+        <div class="cb-what">Domain renewal</div>
+        <div class="cb-cost">~₹85</div>
+        <div class="cb-note">~₹1,000/year billed annually.</div>
+      </div>
+    </div>
+    <div class="cb-total">
+      <span class="lab">Total / month</span>
+      <span class="cb-t-fig">₹6000 ~ 9000</span>
+      <span class="cb-t-note">Cloudflare and email are free — cost is driven by Supabase, Zoom, and Bunny video usage.</span>
+    </div>
+  </div>
+
+  <footer>
+    <div class="num">¶</div>
+    <div class="mid">
+      <b>End of document</b><br/>
+      The whole system, drawn end to end — keep this alongside the codebase as the canonical reference.
+    </div>
+    <div class="r">
+      Cloudflare Pages · Frontend<br/>
+      Supabase · Platform<br/>
+      Bunny.net · Video<br/>
+      Zoom · Live classes
+    </div>
+  </footer>
+
+</div>
+
+<!-- DRAWER -->
+<div class="overlay" id="overlay"></div>
+<aside class="drawer" id="drawer" aria-hidden="true">
+  <div class="dr-head">
+    <button class="dr-close" id="drClose" aria-label="Close">&times;</button>
+    <div class="dr-ico" id="drIco"></div>
+    <h2 id="drName"></h2>
+    <div class="dr-tool" id="drTool"></div>
+    <div class="dr-tagline" id="drTag"></div>
+  </div>
+  <div class="dr-body" id="drBody"></div>
+</aside>
+
+<script>
+/* ---- icons ---- */
+const I = {
+  students:'<circle cx="12" cy="8" r="3.3"/><path d="M5 19c0-3.7 3-5.6 7-5.6s7 1.9 7 5.6"/>',
+  admin:'<circle cx="12" cy="10" r="3"/><path d="M6 19.5c0-3.4 2.8-5 6-5s6 1.6 6 5"/><path d="M9 4.2l3 1.9 3-1.9-1 3.1H10z"/>',
+  spa:'<rect x="3" y="5" width="18" height="14" rx="1.6"/><path d="M3 9.2h18"/><circle cx="6.2" cy="7.1" r=".7"/><circle cx="8.4" cy="7.1" r=".7"/>',
+  auth:'<rect x="5" y="10" width="14" height="9.4" rx="1.6"/><path d="M8 10V7.2a4 4 0 0 1 8 0V10"/><circle cx="12" cy="14.4" r="1.4"/>',
+  db:'<ellipse cx="12" cy="6" rx="7" ry="2.8"/><path d="M5 6v12c0 1.5 3.1 2.8 7 2.8s7-1.3 7-2.8V6"/><path d="M5 12c0 1.5 3.1 2.8 7 2.8s7-1.3 7-2.8"/>',
+  storage:'<path d="M4 7h5l2 2.4h8.5a1 1 0 0 1 1 1V18a1.4 1.4 0 0 1-1.4 1.4H4.4A1.4 1.4 0 0 1 3 18V8.4A1.4 1.4 0 0 1 4.4 7z"/>',
+  realtime:'<circle cx="12" cy="12" r="2"/><path d="M8.2 8.2a5.4 5.4 0 0 0 0 7.6M15.8 8.2a5.4 5.4 0 0 1 0 7.6M5.3 5.3a9.4 9.4 0 0 0 0 13.4M18.7 5.3a9.4 9.4 0 0 1 0 13.4"/>',
+  edge:'<path d="M13 3L5.5 13H11l-1 8 8.5-10.5H13z"/>',
+  bunny:'<circle cx="12" cy="12" r="8.7"/><path d="M10.2 8.6l5.6 3.4-5.6 3.4z"/>',
+  zoom:'<rect x="3" y="7" width="12.5" height="10" rx="2.2"/><path d="M15.5 10.6l5.5-3.1v9l-5.5-3.1z"/>',
+  pipeline:'<circle cx="7.5" cy="12" r="3.6"/><path d="M12.5 12h7M16.5 9l3.2 3-3.2 3"/>',
+  email:'<rect x="3" y="6" width="18" height="12" rx="1.6"/><path d="M3.6 7.2L12 14l8.4-6.8"/>',
+  payments:'<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10.2h18"/><path d="M6.5 14.5h4"/>',
+  security:'<path d="M12 3l7.2 3v5.1c0 5.1-3.3 8.6-7.2 10-3.9-1.4-7.2-4.9-7.2-10V6z"/><path d="M9 12l2.1 2.1L15.2 10"/>',
+  backups:'<rect x="3.2" y="4.2" width="17.6" height="4.8" rx="1"/><path d="M5.2 9v9.6a1.2 1.2 0 0 0 1.2 1.2h11.2a1.2 1.2 0 0 0 1.2-1.2V9"/><path d="M10 12.6h4"/>',
+  monitoring:'<rect x="3" y="5" width="18" height="14" rx="2.2"/><path d="M6.4 13.4h2.8l2-4.6 2.2 7.2 1.9-5.2h2.3"/>'
+};
+const svg = p => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>';
+
+/* ---- component data ---- */
+const C = {
+  students:{
+    name:'Students', tool:'Any web browser — desktop & mobile',
+    tag:'Learners reach the platform with no app to install.',
+    role:'Students open the platform in any modern browser on a phone or laptop. They sign in, browse and watch courses, join live workshops, submit assignments, and track their progress — all through the same web app.',
+    cost:'No cost', costD:'Nothing runs on the student\'s side. They only need a browser and internet.',
+    lvl:0, maint:'Nothing to maintain here — the student device is not your responsibility.',
+    scale:'Not a bottleneck', scaleD:'Every student loads the app from a global CDN edge. The realistic ceiling for this project is 200–300 total users; the entry point would not notice ten times that.'
+  },
+  admin:{
+    name:'Drdha — Admin', tool:'Same web app · admin role',
+    tag:'One fixed account with the teaching & management tools unlocked.',
+    role:'Drdha signs in with the fixed admin account (drdha@divyakala.com) and gets an admin role unlocked inside the same app. From there she builds courses, sets up term groups, batches and sessions, schedules live classes, reviews assignment submissions with annotations and voice notes, and manages the student CRM.',
+    cost:'No cost', costD:'A single admin account — no separate licence or fee.',
+    lvl:0, maint:'None beyond maintaining the app itself.',
+    scale:'Single operator', scaleD:'This is a one-person surface. There is no concurrency concern on the admin side.'
+  },
+  spa:{
+    name:'The Web App', tool:'React + Vite · hosted on Cloudflare Pages',
+    tag:'The whole interface — every screen from sign-in to lesson player.',
+    role:'This is everything the user sees: auth, course browsing, the lesson player, assignment flows, the batch dashboard and the admin course builder. It is a static single-page app — HTML, CSS and JavaScript files that the browser downloads once, then talks directly to Supabase and Bunny.',
+    cost:'Free', costD:'Cloudflare Pages\' free tier hosts the app at no cost — it explicitly allows commercial use and has unlimited bandwidth, so it is the right legal fit for a real client product. (Vercel\'s free Hobby tier is non-commercial only, which would mean paying ~₹1,700/month for Vercel Pro instead.) The domain divyakala.com renews at roughly ₹1,000/year.',
+    lvl:1, maint:'Deploys happen automatically from Git on every push. Expect occasional dependency updates and build fixes. Note: the current ~6,500-line App.jsx should be split into modules for long-term maintainability.',
+    scale:'Effectively unlimited', scaleD:'Served from Cloudflare\'s global edge network — the static files are cached worldwide. There is no practical limit on how many people can load the app at once.',
+    note:'A domain (divyakala.com) is only the address — it still needs a host to actually serve the app. The domain is simply pointed at Cloudflare Pages with one DNS setting; owning the domain does not replace the host.'
+  },
+  auth:{
+    name:'Authentication', tool:'Supabase Auth',
+    tag:'Sign-up, sign-in, sessions and the admin role.',
+    role:'Handles account creation and login — email/password plus OTP magic links, the /auth/callback flow, password resets, secure sessions (JWT), and the distinction between a student and the admin. This is already built and working.',
+    cost:'Included in Supabase Pro', costD:'No separate charge — the plan covers up to 100,000 monthly active users. This project will use a tiny fraction of that.',
+    lvl:1, maint:'Very low. The occasional support case — a student locked out, or a reset email landing in spam.',
+    scale:'Far beyond requirement', scaleD:'A 100,000-user ceiling against roughly 300 real users. Login is never the constraint.'
+  },
+  db:{
+    name:'Database', tool:'Supabase — PostgreSQL',
+    tag:'The system of record for everything the app stores.',
+    role:'Holds profiles, courses, sessions, cards, enrollments, submissions, notifications, and the relational long-course model — term groups, term modules, batches, batch sessions and batch enrollments. Production must move the long-course data off the demo\'s JSONB shortcut and onto these proper tables, so it can be queried cleanly.',
+    cost:'Supabase Pro — ~₹2,100/month', costD:'This one plan also covers Auth, Storage, Realtime and Edge Functions. The free tier is not viable for production: it pauses after a week of inactivity and takes no backups.',
+    lvl:2, maint:'Low to moderate. Schema migrations when features change, watching query performance and connection counts, and keeping access policies correct.',
+    scale:'The one ceiling to watch', scaleD:'This is the only real concurrency limit in the system. The default Micro compute instance comfortably serves 200–300 users (perhaps 20–50 active at once) with built-in connection pooling. If an entire live cohort logs in within the same minute, a compute add-on lifts the ceiling — a setting change, not a re-architecture.'
+  },
+  storage:{
+    name:'File Storage', tool:'Supabase Storage',
+    tag:'Holds files that are not video.',
+    role:'Stores everything that isn\'t streamed video: student assignment uploads in a private bucket, course thumbnails and images in a public bucket, and downloadable notes or resources.',
+    cost:'Included in Supabase Pro', costD:'The Pro plan includes 100 GB of storage — negligible usage at this scale.',
+    lvl:1, maint:'Low. Keep the bucket access rules correct and keep an eye on storage growth.',
+    scale:'Not a constraint', scaleD:'Object storage sitting behind a CDN — concurrent downloads scale freely.'
+  },
+  realtime:{
+    name:'Realtime', tool:'Supabase Realtime',
+    tag:'Live updates without a page refresh.',
+    role:'Pushes instant updates into the app — new assignment feedback and notifications appear the moment they happen, with no reload. Already wired into submissions and notifications.',
+    cost:'Included in Supabase Pro', costD:'No separate charge.',
+    lvl:1, maint:'Low — it largely runs itself.',
+    scale:'Well within limits', scaleD:'The Pro plan allows 500 concurrent realtime connections — far above this project\'s needs.'
+  },
+  edge:{
+    name:'Edge Functions', tool:'Supabase Edge Functions',
+    tag:'Small server-side jobs the browser must not do.',
+    role:'Runs short pieces of server-side code for work that can\'t be trusted to the browser — signing Bunny video tokens (which needs a secret key), the Zoom recording webhook in v2, triggering transactional emails, and payment webhooks if online payments are added.',
+    cost:'Included in Supabase Pro', costD:'The plan includes 500,000 function invocations — far more than needed.',
+    lvl:2, maint:'Low to moderate. This is custom glue code, so it\'s the part most likely to need a fix when an external API changes.',
+    scale:'Auto-scaling', scaleD:'Serverless by nature — each invocation scales independently. No capacity planning required.'
+  },
+  bunny:{
+    name:'Video Streaming', tool:'Bunny.net Stream',
+    tag:'Hosts and delivers every course video and class recording.',
+    role:'Stores and streams all video — recorded course lessons and recordings of past live classes. When a video is uploaded, Bunny transcodes it into multiple resolutions for adaptive streaming and serves it worldwide from edge servers through an embedded player.',
+    cost:'~₹500 – 4,000+/month', costD:'Pay-as-you-go: storage at $0.01/GB/month and delivery at $0.005/GB, with transcoding, the player and security features free. The figure starts small and grows with the video library — the more lessons stored and the more they are watched, the higher it climbs. This is the main reason the monthly cloud budget has headroom built in.',
+    lvl:1, maint:'Low. Uploading new videos is an admin content task, not developer maintenance.',
+    scale:'No streaming ceiling — at all', scaleD:'This is the part you were most worried about, and it is the least of the concerns. Bunny is a CDN: whether one student or five thousand watch a video, each one pulls it from the nearest edge node. There is no shared stream to congest and no concurrency limit — cost simply scales with bandwidth used.'
+  },
+  zoom:{
+    name:'Live Classes', tool:'Zoom — Pro plan',
+    tag:'Runs the live workshops themselves.',
+    role:'The app does not stream live video itself — it stores each session\'s schedule and join link, and the student clicks through to Zoom at class time. Zoom does all the hard real-time video work. This is a deliberate choice: rebuilding live streaming in-house would be far costlier and riskier than using the tool built for it.',
+    cost:'~₹1,376/month', costD:'Zoom Pro (≈₹13,764/year) includes up to 100 participants per meeting and 10 GB of cloud recording.',
+    lvl:1, maint:'Low — Zoom operates the live infrastructure.',
+    scale:'Concurrency handled by Zoom', scaleD:'Zoom Pro supports 100 live participants; the Business tier or a Large Meeting add-on extends that. Real-time concurrency is Zoom\'s problem to solve — which is exactly why live streaming is not built in-house.'
+  },
+  pipeline:{
+    name:'Recording Pipeline', tool:'Zoom Cloud → Edge Function → Bunny API',
+    tag:'Turns a finished live class into a permanent library video.',
+    role:'Recording starts on its own — Zoom\'s "automatic cloud recording" setting is switched on once, so every class records the moment the host opens it, no button pressed. When the class ends, the recording lands in Zoom Cloud and is processed into a streamable link and a downloadable MP4. From there it must be moved to Bunny — either manually (download the MP4 and upload to Bunny, or paste the link in the admin panel) or automatically (a Zoom "recording completed" webhook triggers an Edge Function that hands the recording URL to Bunny\'s pull-from-URL API). Once it is safely in Bunny, the Zoom Cloud copy is deleted.',
+    cost:'No extra cost', costD:'Uses the Zoom and Supabase plans already paid for — there is no charge to ingest a video into Bunny.',
+    lvl:1, maint:'v1 is about 5 minutes of admin work per workshop. v2 is build-once with low upkeep.',
+    scale:'Runs once per class', scaleD:'Not concurrency-sensitive — it fires once when a recording finishes.',
+    note:'Zoom Cloud is only a 10 GB buffer — roughly 10–15 hours of recordings, not a library. Each recording must be moved to Bunny and then deleted from Zoom Cloud to free the space; Bunny is the permanent home. Launch with the manual v1 flow and build the v2 webhook automation only once manual upload genuinely proves annoying.'
+  },
+  email:{
+    name:'Transactional Email', tool:'Resend',
+    tag:'Delivers system emails reliably.',
+    role:'Sends the emails the system depends on — sign-up confirmations, password resets and notifications. A dedicated provider is used because Supabase\'s built-in email is rate-limited and not meant for production volume.',
+    cost:'Free tier', costD:'Resend\'s free tier covers 3,000 emails/month — comfortably enough here. A paid tier (~₹1,700/mo) only becomes relevant well beyond that.',
+    lvl:1, maint:'Low. Occasionally confirm deliverability — that mail isn\'t landing in spam folders.',
+    scale:'Far beyond requirement', scaleD:'Email volume for this project is tiny relative to the free allowance.'
+  },
+  payments:{
+    name:'Payments', tool:'Manual (v1) → Razorpay (v2)',
+    tag:'How course fees are collected and tracked.',
+    role:'v1 (recommended for launch): fees are collected offline by UPI or bank transfer, and Drdha marks fee status in the student CRM — which already has the fields for it. v2: a checkout with a webhook that updates enrollment automatically once payment clears.',
+    cost:'₹0 in v1', costD:'The manual flow costs nothing. Razorpay has no monthly fee — it takes roughly 2% per transaction. Online payments also bring GST and invoicing obligations to plan for.',
+    lvl:0, maint:'v1 needs no maintenance. v2 is moderate — reconciliation, webhook handling and refunds.',
+    scale:'Not a concurrency concern', scaleD:'Payment events are infrequent and independent — no scaling consideration.',
+    note:'This is still an open decision. Confirm whether online payment is needed for launch, or whether manual fee tracking is enough for v1.'
+  },
+  security:{
+    name:'Security & Access', tool:'Row Level Security · Bunny tokens · HTTPS',
+    tag:'The layer that keeps every user\'s data private.',
+    role:'Row Level Security policies on every table make sure a student can only read their own submissions, enrollments and profile, while the admin sees everything — enforced inside the database itself, not just hidden in the interface. Bunny token authentication gives videos signed, expiring links so course content can\'t be shared to bypass enrollment. All traffic runs over HTTPS, and API keys and signing secrets live server-side only.',
+    cost:'Configuration — ₹0', costD:'These are configuration and good practice, not paid products.',
+    lvl:2, maint:'Moderate. Access policies must be reviewed every time the schema changes.',
+    scale:'Negligible overhead', scaleD:'Policy checks run inside Postgres with negligible performance cost.',
+    note:'Highest-priority item to get right before real users. Row Level Security is currently the biggest unverified gap — it must be designed and tested deliberately.'
+  },
+  backups:{
+    name:'Backups & Durability', tool:'Supabase backups · offline video masters',
+    tag:'Protection against losing data or video.',
+    role:'Supabase Pro takes automatic daily database backups with 7-day retention. Separately, the original recordings — the masters — should be kept somewhere outside Bunny. Bunny holds the delivery copy, not your archive.',
+    cost:'Database backups included', costD:'Covered by Supabase Pro. Storing master video files can be a cheap drive or cold storage.',
+    lvl:1, maint:'Low — mostly a discipline: confirm masters are actually being kept.',
+    scale:'Not applicable', scaleD:'A durability concern, not a load one.'
+  },
+  monitoring:{
+    name:'Monitoring & Ops', tool:'Supabase · Bunny · Cloudflare dashboards',
+    tag:'Keeping an eye on the running system.',
+    role:'Watching the system stay healthy — Supabase usage and query performance, Bunny bandwidth and spend, Cloudflare Pages build and deploy logs. An error tracker such as Sentry (free tier) can catch frontend errors before users report them.',
+    cost:'Free', costD:'The dashboards are included with each service; Sentry\'s free tier costs nothing.',
+    lvl:1, maint:'A weekly glance — part of the maintenance retainer.',
+    scale:'Not applicable', scaleD:'An operational concern, not a load one.'
+  }
+};
+
+/* ---- render cards ---- */
+const lvlText = ['None','Low','Moderate'];
+document.querySelectorAll('.node').forEach(n=>{
+  const d = C[n.dataset.c];
+  if(!d) return;
+  n.innerHTML =
+    '<div class="node-top">'+
+      '<div class="ico">'+svg(I[n.dataset.c])+'</div>'+
+      '<div class="node-text"><h3>'+d.name+'</h3><div class="tool">'+d.tool+'</div></div>'+
+    '</div>'+
+    '<div class="tag">'+d.tag+'</div>'+
+    '<div class="node-foot"><span class="chip">'+d.cost+'</span><span class="more">+</span></div>';
+  n.addEventListener('click',()=>openDrawer(n.dataset.c));
+});
+
+/* ---- drawer ---- */
+const overlay=document.getElementById('overlay'),drawer=document.getElementById('drawer');
+function dots(l){let s='<span class="ds">';for(let i=0;i<3;i++)s+='<i class="'+(i<l?'on':'')+'"></i>';return s+'</span>';}
+function sec(label,html){return '<div class="dr-sec"><div class="sl"><span>'+label+'</span></div>'+html+'</div>';}
+
+function openDrawer(id){
+  const d=C[id];if(!d)return;
+  const ico=document.getElementById('drIco');
+  ico.innerHTML=svg(I[id]);
+  document.getElementById('drName').textContent=d.name;
+  document.getElementById('drTool').textContent=d.tool;
+  document.getElementById('drTag').textContent=d.tag;
+  let body='';
+  body+=sec('What it does','<p>'+d.role+'</p>');
+  body+=sec('What it costs to run','<div class="big">'+d.cost+'</div><p>'+d.costD+'</p>');
+  body+=sec('Maintenance needed','<span class="lvl">'+dots(d.lvl)+lvlText[d.lvl]+'</span><p>'+d.maint+'</p>');
+  body+=sec('Scalability · concurrent users','<div class="big">'+d.scale+'</div><p>'+d.scaleD+'</p>');
+  if(d.note) body+='<div class="dr-note"><b>Note —</b> '+d.note+'</div>';
+  document.getElementById('drBody').innerHTML=body;
+  document.getElementById('drBody').scrollTop=0;
+  overlay.classList.add('on');drawer.classList.add('on');drawer.setAttribute('aria-hidden','false');
+}
+function closeDrawer(){overlay.classList.remove('on');drawer.classList.remove('on');drawer.setAttribute('aria-hidden','true');}
+overlay.addEventListener('click',closeDrawer);
+document.getElementById('drClose').addEventListener('click',closeDrawer);
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeDrawer();});
+</script>
+</body>
+</html>
